@@ -1227,224 +1227,6 @@
         await Promise.all(allTargets.map(t => this.tryFetchSymbolFromRepoCache(t.sym, t.paths)));
         updateDataCacheBadges();
       }
-        return h >>> 0;
-      }
-
-      static _createRng(seedStr) {
-        let a = this._hashString(seedStr);
-        return function () {
-          let t = (a += 0x6D2B79F5);
-          t = Math.imul(t ^ (t >>> 15), t | 1);
-          t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-        };
-      }
-
-      // Build trading calendar from 2015-11-01 (warmup before 2016) to 2026-11-05
-      static getTradingDates() {
-        if (this.tradingCalendar) return this.tradingCalendar;
-        const dates = [];
-        const curr = new Date("2015-11-02T00:00:00Z");
-        const end = new Date("2026-11-05T00:00:00Z");
-        while (curr <= end) {
-          const day = curr.getUTCDay();
-          if (day !== 0 && day !== 6) {
-            const iso = curr.toISOString().slice(0, 10);
-            dates.push({ dateObj: new Date(curr), date_str: iso, ms: curr.getTime() });
-          }
-          curr.setUTCDate(curr.getUTCDate() + 1);
-        }
-        this.tradingCalendar = dates;
-        return dates;
-      }
-
-      // Stock-specific annual drift and volatility calibration reflecting real NSE history (including survivorship laggards)
-      static STOCK_PROFILES = {
-        "RELIANCE":   { basePrice: 460,  drift: 0.195, vol: 0.24 },
-        "TCS":        { basePrice: 1180, drift: 0.145, vol: 0.20 },
-        "HDFCBANK":   { basePrice: 610,  drift: 0.125, vol: 0.19 },
-        "ICICIBANK":  { basePrice: 245,  drift: 0.185, vol: 0.25 },
-        "INFY":       { basePrice: 510,  drift: 0.155, vol: 0.22 },
-        "BHARTIARTL": { basePrice: 310,  drift: 0.190, vol: 0.24 },
-        "SBIN":       { basePrice: 250,  drift: 0.155, vol: 0.28 },
-        "LT":         { basePrice: 980,  drift: 0.160, vol: 0.23 },
-        "ITC":        { basePrice: 240,  drift: 0.105, vol: 0.19 },
-        "BAJFINANCE": { basePrice: 1050, drift: 0.225, vol: 0.29 },
-        "TITAN":      { basePrice: 375,  drift: 0.230, vol: 0.25 },
-        "TRENT":      { basePrice: 210,  drift: 0.340, vol: 0.30 },
-        "BEL":        { basePrice: 42,   drift: 0.235, vol: 0.28 },
-        "M&M":        { basePrice: 640,  drift: 0.175, vol: 0.25 },
-        "SUNPHARMA":  { basePrice: 680,  drift: 0.130, vol: 0.23 },
-        "TATAMOTORS": { basePrice: 480,  drift: 0.115, vol: 0.34 },
-        "NTPC":       { basePrice: 135,  drift: 0.140, vol: 0.22 },
-        "POWERGRID":  { basePrice: 110,  drift: 0.135, vol: 0.20 },
-        "ULTRACEMCO": { basePrice: 3600, drift: 0.145, vol: 0.22 },
-        "TATASTEEL":  { basePrice: 40,   drift: 0.155, vol: 0.31 },
-        "ADANIENT":   { basePrice: 140,  drift: 0.280, vol: 0.38 },
-        "HAL":        { basePrice: 450,  drift: 0.260, vol: 0.29 },
-        // Historical 2016/2018 additions that suffered real drawdowns (demonstrates why Point-In-Time matters!)
-        "YESBANK":    { basePrice: 255,  drift: -0.22, vol: 0.45 },
-        "IDEA":       { basePrice: 78,   drift: -0.18, vol: 0.42 },
-        "IBULHSGFIN": { basePrice: 790,  drift: -0.16, vol: 0.44 },
-        "ZEEL":       { basePrice: 490,  drift: -0.07, vol: 0.36 },
-        "BHEL":       { basePrice: 92,   drift: 0.085, vol: 0.34 },
-        "LUPIN":      { basePrice: 1480, drift: 0.045, vol: 0.27 },
-        "VEDL":       { basePrice: 195,  drift: 0.115, vol: 0.33 },
-        "PNB":        { basePrice: 130,  drift: 0.025, vol: 0.35 }
-      };
-
-      // Macro Nifty regime drift modifier by date
-      static _getNiftyMacroRegimeShift(dateStr) {
-        if (dateStr >= "2020-02-15" && dateStr <= "2020-03-25") return -0.0125; // COVID-19 crash
-        if (dateStr >= "2020-04-01" && dateStr <= "2021-10-18") return 0.00115; // Post-COVID liquidity bull
-        if (dateStr >= "2021-10-19" && dateStr <= "2022-06-20") return -0.00035; // 2022 tightening consolidation
-        if (dateStr >= "2023-03-28" && dateStr <= "2024-09-27") return 0.00085; // 2023-2024 Indian capex rally
-        if (dateStr >= "2024-09-28" && dateStr <= "2025-02-28") return -0.00045; // FII pullback late 2024
-        if (dateStr >= "2025-03-01") return 0.00062; // 2025-2026 steady expansion
-        return 0.00025;
-      }
-
-      static _generateStockSeries(sym) {
-        const dates = this.getTradingDates();
-        const rng = this._createRng("NSE_PIT_" + sym);
-        const prof = this.STOCK_PROFILES[sym] || {
-          basePrice: 350 + (this._hashString(sym) % 1400),
-          drift: 0.135 + ((this._hashString(sym) % 90) - 35) / 1000,
-          vol: 0.23
-        };
-
-        const dailyDriftBase = prof.drift / 252.0;
-        const dailyVol = prof.vol / Math.sqrt(252.0);
-        let price = prof.basePrice;
-        const rows = [];
-
-        // Cyclical wave seed for realistic medium-term swings (so technical indicators like MACD/SMA/BB trigger rich trades)
-        let phase1 = rng() * Math.PI * 2;
-        let phase2 = rng() * Math.PI * 2;
-
-        for (let i = 0; i < dates.length; i++) {
-          const d = dates[i];
-          // Box-Muller normal sample
-          const u1 = Math.max(1e-7, rng());
-          const u2 = rng();
-          const z = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
-
-          const macroShift = this._getNiftyMacroRegimeShift(d.date_str);
-          const swingWave = Math.sin(i / 18.0 + phase1) * 0.0022 + Math.cos(i / 45.0 + phase2) * 0.0015;
-          const ret = dailyDriftBase + macroShift + swingWave + dailyVol * z;
-
-          const prevClose = price;
-          price = Math.max(4.5, prevClose * (1.0 + ret));
-
-          const intradaySpread = price * (0.006 + rng() * 0.014);
-          const openGap = (rng() - 0.49) * 0.007;
-          const open = Number(Math.max(2.0, prevClose * (1.0 + openGap)).toFixed(2));
-          const close = Number(price.toFixed(2));
-          const high = Number((Math.max(open, close) + intradaySpread * rng()).toFixed(2));
-          const low = Number(Math.max(1.0, Math.min(open, close) - intradaySpread * rng()).toFixed(2));
-
-          rows.push({
-            date: d.dateObj,
-            date_str: d.date_str,
-            ms: d.ms,
-            open,
-            high,
-            low,
-            close
-          });
-        }
-        return rows;
-      }
-
-      static _generateBtcInrSeries() {
-        const dates = this.getTradingDates();
-        const rng = this._createRng("BTC_INR_CRYPTO_VDA");
-        let price = 32000.0; // Late 2015 ~ Rs 32,000 (~$480)
-        const rows = [];
-
-        for (let i = 0; i < dates.length; i++) {
-          const d = dates[i];
-          const ds = d.date_str;
-          let regimeDrift = 0.0008;
-          if (ds >= "2016-09-01" && ds <= "2017-12-18") regimeDrift = 0.0082;      // 2017 Halving Bull
-          else if (ds > "2017-12-18" && ds <= "2018-12-15") regimeDrift = -0.0052; // 2018 Crypto Winter
-          else if (ds >= "2020-10-01" && ds <= "2021-11-10") regimeDrift = 0.0058; // 2020-21 Institutional Bull
-          else if (ds > "2021-11-10" && ds <= "2022-11-21") regimeDrift = -0.0042; // 2022 FTX Bear
-          else if (ds >= "2023-01-01" && ds <= "2024-03-15") regimeDrift = 0.0038; // ETF Approval Rally
-          else if (ds > "2024-03-15" && ds <= "2025-10-25") regimeDrift = 0.0014;  // 2024-25 Expansion
-          else if (ds > "2025-10-25") regimeDrift = 0.00105;                       // 2025-26 Maturity
-
-          const u1 = Math.max(1e-7, rng());
-          const u2 = rng();
-          const z = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
-          const ret = regimeDrift + 0.026 * z;
-          price = Math.max(15000.0, price * (1.0 + ret));
-          const close = Number(price.toFixed(2));
-          rows.push({
-            date: d.dateObj,
-            date_str: ds,
-            ms: d.ms,
-            open: close,
-            high: Number((close * 1.015).toFixed(2)),
-            low: Number((close * 0.985).toFixed(2)),
-            close
-          });
-        }
-        return rows;
-      }
-
-      static _generateGoldSeries() {
-        const dates = this.getTradingDates();
-        const rng = this._createRng("GOLD_24K_INDIA_BENCHMARK");
-        let spot24kBeforeDuty = 25800.0; // Base ex-duty 10g INR in late 2015
-        const etfRows = [];
-        const spotRows = [];
-
-        for (let i = 0; i < dates.length; i++) {
-          const d = dates[i];
-          const ds = d.date_str;
-
-          let drift = 0.00042;
-          if (ds >= "2019-06-01" && ds <= "2020-08-07") drift = 0.00135; // 2019-2020 Safe Haven Surge
-          else if (ds > "2020-08-07" && ds <= "2022-09-30") drift = 0.00008; // 2021-22 Consolidation
-          else if (ds >= "2023-10-01" && ds <= "2026-11-05") drift = 0.00092; // 2023-2026 Central Bank Gold Rally
-
-          const u1 = Math.max(1e-7, rng());
-          const u2 = rng();
-          const z = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
-
-          spot24kBeforeDuty = spot24kBeforeDuty * (1.0 + drift + 0.0072 * z);
-
-          // Exact match to Python: duty_cut_date = pd.Timestamp("2024-07-23")
-          const importDutyFactor = ds < "2024-07-23" ? 1.125 : 1.06;
-          const inrPer10g = Number((spot24kBeforeDuty * importDutyFactor).toFixed(2));
-          // GOLDBEES trades at ~1/1000th of 10g gold (0.01g unit adjusted for ETF expense ratio)
-          const goldBeesPrice = Number((inrPer10g / 915.0).toFixed(2));
-
-          spotRows.push({
-            date: d.dateObj,
-            date_str: ds,
-            ms: d.ms,
-            open: inrPer10g,
-            high: inrPer10g,
-            low: inrPer10g,
-            close: inrPer10g
-          });
-
-          etfRows.push({
-            date: d.dateObj,
-            date_str: ds,
-            ms: d.ms,
-            open: goldBeesPrice,
-            high: goldBeesPrice,
-            low: goldBeesPrice,
-            close: goldBeesPrice
-          });
-        }
-
-        this.memoryCache["GOLD_24K_10G_INR"] = spotRows;
-        this.memoryCache["GOLDBEES_ETF"] = etfRows;
-      }
 
       // =====================================================================
       // SECTION 5: VECTORIZED TECHNICAL INDICATOR ENGINE (compute_all_indicators)
@@ -3022,6 +2804,70 @@
           showToast(`Synced ${NSEDataProvider.repoCsvLoaded.size} CSV(s) from ./nse_data_cache/!`);
         } else {
           showToast("No ./nse_data_cache/*.csv found on server; using calibrated historical waypoints.");
+        }
+      });
+
+      // Download Cached Series as CSV
+      document.getElementById("btnDownloadCsv").addEventListener("click", () => {
+        const sym = document.getElementById("selExportSymbol").value;
+        NSEDataProvider.ensureSymbolInitialized(sym);
+        const rows = NSEDataProvider.memoryCache[sym] || [];
+        let csv = "date,open,high,low,close\n";
+        rows.forEach(r => {
+          csv += `${r.date_str},${r.open},${r.high},${r.low},${r.close}\n`;
+        });
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${sym}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast(`Downloaded ${sym}.csv (${rows.length} trading days)`);
+      });
+
+      // Optional Yahoo Finance Live Benchmark Sync
+      document.getElementById("btnSyncYahoo").addEventListener("click", async () => {
+        showToast("Attempting Yahoo Finance CORS relay sync for BTC-INR & GOLDBEES.NS...");
+        try {
+          const url = "https://query1.finance.yahoo.com/v8/finance/chart/BTC-INR?range=10y&interval=1d";
+          const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+          const res = await fetch(proxyUrl);
+          if (!res.ok) throw new Error("Proxy HTTP error");
+          const data = await res.json();
+          const result = data?.chart?.result?.[0];
+          if (result && result.timestamp) {
+            const ts = result.timestamp;
+            const closes = result.indicators.quote[0].close;
+            const rows = [];
+            for (let i = 0; i < ts.length; i++) {
+              if (closes[i] == null) continue;
+              const dt = new Date(ts[i] * 1000);
+              const c = Number(closes[i].toFixed(2));
+              rows.push({
+                date: dt,
+                date_str: dt.toISOString().slice(0, 10),
+                ms: dt.getTime(),
+                open: c,
+                high: c,
+                low: c,
+                close: c
+              });
+            }
+            if (rows.length > 100) {
+              NSEDataProvider.memoryCache["BTC_INR_CRYPTO"] = rows;
+              NSEDataProvider.customCsvLoaded.add("BTC_INR_CRYPTO");
+              updateDataCacheBadges();
+              document.getElementById("btnRunSingle").click();
+              showToast(`Synced ${rows.length} live BTC-INR bars from Yahoo Finance!`);
+              return;
+            }
+          }
+          showToast("Yahoo relay unavailable; using calibrated historical waypoints.");
+        } catch (_) {
+          showToast("CORS relay rate-limited; using built-in calibrated historical waypoints.");
         }
       });
     });

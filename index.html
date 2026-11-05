@@ -1,0 +1,2689 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NSE Nifty-50 Point-in-Time Algo Backtester & Multi-Asset Indian Tax Emulator</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- jsPDF for Client-Side Vector Landscape A4 PDF Report Generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          },
+          colors: {
+            slate: {
+              850: '#151e32',
+              950: '#090d16'
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    /* Custom scrollbars & subtle glassmorphism */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+    .glass-card {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(51, 65, 85, 0.65);
+    }
+    .rank-1-glow {
+      background: linear-gradient(90deg, rgba(16, 185, 129, 0.14) 0%, rgba(15, 23, 42, 0.4) 100%);
+      border-left: 3px solid #10b981;
+    }
+    @keyframes pulse-subtle {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+    .animate-pulse-subtle {
+      animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased min-h-screen flex flex-col selection:bg-emerald-500 selection:text-white">
+
+  <!-- ===================================================================== -->
+  <!-- TOP EXECUTIVE HEADER BANNER                                           -->
+  <!-- ===================================================================== -->
+  <header class="border-b border-slate-800 bg-slate-900/90 sticky top-0 z-30 backdrop-blur-md">
+    <div class="max-w-[1600px] mx-auto px-4 sm:px-6 py-3 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+      <div class="flex items-start sm:items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center shadow-lg shadow-emerald-900/40 shrink-0 mt-0.5 sm:mt-0">
+          <i class="fa-solid fa-chart-line text-white text-lg"></i>
+        </div>
+        <div>
+          <div class="flex flex-wrap items-center gap-2">
+            <h1 class="text-base sm:text-lg font-extrabold tracking-tight text-white">
+              INDIAN MULTI-ASSET &amp; ALGORITHMIC TRADING BACKTESTER
+            </h1>
+            <span class="px-2 py-0.5 text-[11px] font-mono font-semibold uppercase rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+              100% Client-Side Engine
+            </span>
+            <span class="px-2 py-0.5 text-[11px] font-mono font-semibold rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+              Finance Act 2024–26 Tax
+            </span>
+          </div>
+          <p class="text-xs text-slate-400 mt-0.5">
+            Point-in-Time Nifty 50 Equities (Groww + 5 bps Slippage) vs. Gold (GOLDBEES ETF &amp; 24K Bullion) vs. Bitcoin (Sec 115BBH 31.2% VDA) vs. Bank FDs
+          </p>
+        </div>
+      </div>
+
+      <!-- Right Action Buttons -->
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="btnOpenDataModal" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-database text-cyan-400"></i>
+          <span>Data Cache &amp; CSV Dropzone</span>
+          <span id="badgeCacheCount" class="ml-1 px-1.5 py-0.2 bg-cyan-500/20 text-cyan-300 rounded text-[10px] font-mono">Ready</span>
+        </button>
+
+        <button id="btnOpenPitModal" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-layer-group text-purple-400"></i>
+          <span>PIT Nifty-50 Universe</span>
+          <span id="badgePitVintage" class="ml-1 px-1.5 py-0.2 bg-purple-500/20 text-purple-300 rounded text-[10px] font-mono">50 Stocks</span>
+        </button>
+
+        <button id="btnExportPdf" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-rose-600 to-orange-600 hover:from-rose-500 hover:to-orange-500 text-white shadow-md shadow-rose-950/50 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-file-pdf"></i>
+          <span>Export Landscape PDF Report</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===================================================================== -->
+  <!-- MAIN WORKSPACE CONTAINER                                              -->
+  <!-- ===================================================================== -->
+  <main class="max-w-[1600px] w-full mx-auto px-4 sm:px-6 py-5 flex-1 space-y-5">
+
+    <!-- CONTROL PANEL & SIMULATION PARAMETERS -->
+    <section class="glass-card rounded-2xl p-4 sm:p-5 shadow-xl">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 items-end">
+        
+        <!-- Start Date -->
+        <div class="lg:col-span-2">
+          <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+            Start Date (PIT Anchor)
+          </label>
+          <input type="date" id="inpStartDate" value="2016-10-26" min="2016-01-01" max="2026-10-20"
+            class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-sm font-mono text-white focus:outline-none focus:border-emerald-500 transition" />
+        </div>
+
+        <!-- End Date -->
+        <div class="lg:col-span-2">
+          <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+            End Date
+          </label>
+          <input type="date" id="inpEndDate" value="2026-10-26" min="2016-01-15" max="2026-11-01"
+            class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-sm font-mono text-white focus:outline-none focus:border-emerald-500 transition" />
+        </div>
+
+        <!-- Total Capital Budget -->
+        <div class="lg:col-span-2">
+          <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+            Total Budget (₹ INR)
+          </label>
+          <div class="relative">
+            <span class="absolute left-3 top-2 text-slate-400 font-mono text-sm">₹</span>
+            <input type="number" id="inpBudget" value="1000000" step="100000" min="50000"
+              class="w-full pl-7 pr-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-sm font-mono text-white focus:outline-none focus:border-emerald-500 transition" />
+          </div>
+        </div>
+
+        <!-- Min Standard FD Lock Days -->
+        <div class="lg:col-span-1">
+          <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5" title="Minimum days required for Standard Bank FD lock-in">
+            Min FD Days
+          </label>
+          <input type="number" id="inpMinFdDays" value="365" step="30" min="7"
+            class="w-full px-2.5 py-2 rounded-lg bg-slate-900 border border-slate-700 text-sm font-mono text-white focus:outline-none focus:border-emerald-500 transition" />
+        </div>
+
+        <!-- Slippage (bps) -->
+        <div class="lg:col-span-1">
+          <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5" title="Market impact slippage in basis points per leg (default 5 bps = 0.05%)">
+            Slip (bps)
+          </label>
+          <input type="number" id="inpSlippageBps" value="5" step="1" min="0" max="50"
+            class="w-full px-2.5 py-2 rounded-lg bg-slate-900 border border-slate-700 text-sm font-mono text-white focus:outline-none focus:border-emerald-500 transition" />
+        </div>
+
+        <!-- Execution Buttons -->
+        <div class="sm:col-span-2 lg:col-span-4 flex flex-wrap sm:flex-nowrap gap-2">
+          <button id="btnRunSingle" class="flex-1 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-950/60 transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-bolt"></i>
+            <span>Run Window</span>
+          </button>
+
+          <button id="btnRunSuite" class="flex-1 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-950/60 transition flex items-center justify-center gap-2" title="Runs the 3 canonical windows from __main__ (10Y: 2016-2026, 3Y: 2023-2026, 1Y: 2025-2026)">
+            <i class="fa-solid fa-layer-group"></i>
+            <span>Run 3-Window Suite (10Y / 3Y / 1Y)</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Window Presets & Session History Bar -->
+      <div class="mt-4 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-1.5">
+          <span class="text-[11px] font-mono uppercase text-slate-400 mr-1">Quick Presets:</span>
+          <button data-start="2016-10-26" data-end="2026-10-26" class="preset-btn px-2.5 py-1 rounded-md text-xs font-mono bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
+            10Y (26-10-2016 → 26-10-2026)
+          </button>
+          <button data-start="2023-10-26" data-end="2026-10-26" class="preset-btn px-2.5 py-1 rounded-md text-xs font-mono bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
+            3Y (26-10-2023 → 26-10-2026)
+          </button>
+          <button data-start="2025-10-26" data-end="2026-10-26" class="preset-btn px-2.5 py-1 rounded-md text-xs font-mono bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
+            1Y (26-10-2025 → 26-10-2026)
+          </button>
+          <button data-start="2020-01-01" data-end="2022-01-01" class="preset-btn px-2.5 py-1 rounded-md text-xs font-mono bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
+            COVID Era (2020 → 2022)
+          </button>
+          <button data-start="2026-04-01" data-end="2026-10-26" class="preset-btn px-2.5 py-1 rounded-md text-xs font-mono bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
+            Short-Term &lt;1Y (208d FD Test)
+          </button>
+        </div>
+
+        <!-- Session Period Tabs (populated as runs accumulate) -->
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] font-mono text-slate-400">Session Windows (<span id="lblSessionCount">0</span>):</span>
+          <div id="sessionTabsContainer" class="flex flex-wrap items-center gap-1.5"></div>
+          <button id="btnClearSession" class="px-2 py-1 rounded text-[11px] font-mono text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition" title="Clear accumulated PDF session windows">
+            <i class="fa-solid fa-trash-can"></i> Clear
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- ACTIVE WINDOW BANNER & 4 EXECUTIVE KPI HIGHLIGHT CARDS               -->
+    <!-- ===================================================================== -->
+    <section class="space-y-3">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
+        <div class="flex items-center gap-2.5">
+          <span id="lblActiveWindowBadge" class="px-2.5 py-1 rounded-md bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-mono text-xs font-bold">
+            WINDOW #1
+          </span>
+          <h2 id="lblActiveWindowTitle" class="text-sm sm:text-base font-bold text-white font-mono">
+            FROM 26-10-2016 TO 26-10-2026 (3,652 Calendar Days) | BUDGET: ₹10,00,000.00
+          </h2>
+        </div>
+        <div id="lblExecutionSpeed" class="text-xs font-mono text-slate-400">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+      <!-- 4 KPI Highlight Cards (Matches PDFReportGenerator KPI Row) -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" id="kpiCardsGrid">
+        <!-- Populated by JS -->
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- MAIN LEADERBOARD TABLE + VECTOR ROI BAR CHART                        -->
+    <!-- ===================================================================== -->
+    <div class="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
+
+      <!-- Left 7 Cols: Ranked Multi-Asset Leaderboard Table -->
+      <section class="xl:col-span-7 glass-card rounded-2xl overflow-hidden shadow-xl">
+        <div class="px-4 sm:px-5 py-3.5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              <i class="fa-solid fa-ranking-star text-amber-400"></i>
+              <span>POST-TAX NET PROFIT LEADERBOARD</span>
+            </h3>
+            <p class="text-[11px] text-slate-400 mt-0.5">
+              Click any row to inspect 50-stock constituent P&amp;L, trade ledger, and Indian statutory tax/brokerage waterfall
+            </p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] font-mono text-slate-400">Sorted by: <strong class="text-emerald-400">Post-Tax Net (₹)</strong></span>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-900/90 border-b border-slate-800 text-[11px] font-mono uppercase text-slate-400">
+                <th class="py-3 pl-4 pr-2 text-center w-12">Rank</th>
+                <th class="py-3 px-2.5">Strategy / Asset Class</th>
+                <th class="py-3 px-2.5 hidden md:table-cell">Execution / Rate Details</th>
+                <th class="py-3 px-2.5 text-right">Gross P&amp;L (₹)</th>
+                <th class="py-3 px-2.5 text-right hidden sm:table-cell">Fee/GST/STT</th>
+                <th class="py-3 px-2.5 text-right hidden sm:table-cell">CG/VDA/IT Tax</th>
+                <th class="py-3 px-2.5 text-right">Post-Tax Net (₹)</th>
+                <th class="py-3 pl-2 pr-4 text-right">Net ROI</th>
+              </tr>
+            </thead>
+            <tbody id="leaderboardTableBody" class="divide-y divide-slate-800/70 text-xs font-mono">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Right 5 Cols: Vector Horizontal ROI Chart & Tax Drag Breakdown -->
+      <section class="xl:col-span-5 space-y-5">
+        
+        <!-- Vector Horizontal ROI (%) Bar Chart Card (Matches ReportLab Drawing) -->
+        <div class="glass-card rounded-2xl p-4 sm:p-5 shadow-xl">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                <i class="fa-solid fa-chart-bar text-emerald-400"></i>
+                <span>POST-TAX NET ROI (%) VISUAL COMPARISON</span>
+              </h3>
+              <p class="text-[11px] text-slate-400">
+                Vector horizontal comparison across Equities, Gold, Crypto &amp; Bank FDs
+              </p>
+            </div>
+            <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300">After All Taxes &amp; Fees</span>
+          </div>
+
+          <div id="roiVectorChartContainer" class="w-full overflow-x-auto">
+            <!-- SVG Vector Bar Chart injected here -->
+          </div>
+        </div>
+
+        <!-- Statutory Drag Breakdown (Gross vs Brokerage/STT/GST vs Income/CG/VDA Tax) -->
+        <div class="glass-card rounded-2xl p-4 sm:p-5 shadow-xl">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                <i class="fa-solid fa-scale-balanced text-amber-400"></i>
+                <span>FRICTION &amp; TAX DRAG ANALYZER (% OF GROSS GAIN)</span>
+              </h3>
+              <p class="text-[11px] text-slate-400">
+                How much Gross Profit is lost to Broker/STT/GST/Spread vs. Government Taxes
+              </p>
+            </div>
+          </div>
+
+          <div id="taxDragContainer" class="space-y-2.5 max-h-[310px] overflow-y-auto pr-1">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+      </section>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- PYTHON ASCII TERMINAL LOG OUTPUT & METHODOLOGY FOOTER                -->
+    <!-- ===================================================================== -->
+    <section class="glass-card rounded-2xl overflow-hidden shadow-xl">
+      <div class="px-4 sm:px-5 py-3 bg-slate-900 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+          <h3 class="text-xs font-mono font-bold uppercase tracking-wider text-slate-200">
+            Terminal Console Output (Exact Python ASCII Report Format)
+          </h3>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="btnCopyAscii" class="px-2.5 py-1 rounded text-xs font-mono bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center gap-1.5">
+            <i class="fa-regular fa-copy"></i>
+            <span>Copy ASCII Table</span>
+          </button>
+        </div>
+      </div>
+      <pre id="asciiConsoleOutput" class="p-4 text-[11px] leading-relaxed font-mono text-emerald-300/90 bg-slate-950/90 overflow-x-auto max-h-80"></pre>
+    </section>
+
+    <!-- Indian Regulatory & Tax Methodology Reference Card -->
+    <section class="glass-card rounded-2xl p-4 sm:p-5 text-xs text-slate-400 leading-relaxed space-y-2">
+      <div class="font-bold text-slate-200 flex items-center gap-2">
+        <i class="fa-solid fa-book-open text-emerald-400"></i>
+        <span>Indian Regulatory, Brokerage &amp; Tax Methodology (Finance Act 2024–26 Specification)</span>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 pt-1">
+        <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800/80">
+          <div class="font-semibold text-emerald-400 mb-1">1. Nifty-50 Point-in-Time Equities</div>
+          Groww Brokerage (0.1% capped at ₹20/order), STT (0.1% delivery buy &amp; sell, 0.025% intraday short sell), NSE Txn (0.00297%), SEBI/IPFT (0.0001% each), Stamp Duty (0.015% delivery buy, 0.003% intraday), CDSL/Groww DP (₹20 + 18% GST on delivery sell), 5 bps slippage, and 2.75% p.a. idle cash sweep. Tax: <strong>20.8% STCG</strong> (&le;365d), <strong>13.0% LTCG</strong> (&gt;365d above ₹1.25L/yr exemption), <strong>31.2% Intraday</strong> speculative tax.
+        </div>
+        <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800/80">
+          <div class="font-semibold text-amber-400 mb-1">2. Gold (NSE ETF vs. 24K Bullion)</div>
+          <strong>NSE Gold ETF (GOLDBEES):</strong> 0% STT, 0% bullion GST, Groww brokerage + 5 bps slippage; qualifies for <strong>13.0% LTCG</strong> after &gt;365 days (31.2% slab STCG if &le;365d).<br/>
+          <strong>Physical/Digital 24K Gold:</strong> Incurs 3% Buy GST + 1.5% buy/sell dealer spread (calibrated with July 23, 2024 duty cut from 12.5% to 6%) and requires <strong>&ge;730 days</strong> (24 mos) for 13.0% LTCG.
+        </div>
+        <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800/80">
+          <div class="font-semibold text-orange-400 mb-1">3. Crypto: Bitcoin (BTC-INR Sec 115BBH)</div>
+          0.20% Indian exchange fee per leg + 18% GST on fee, <strong>1% Sec 194S TDS</strong> deducted on gross sale proceeds, and flat <strong>31.2% (30% + 4% Cess)</strong> Section 115BBH Virtual Digital Asset (VDA) income tax on gains with no loss set-off.
+        </div>
+        <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800/80">
+          <div class="font-semibold text-cyan-400 mb-1">4. Bank FDs &amp; Savings Accounts</div>
+          Averaged across Top 4 Nationalized (SBI, PNB, BoB, Canara) &amp; Top 4 Private/Intl (HDFC, ICICI, Axis, StanChart) banks. Quarterly compounding (&ge;180d FD / &ge;90d Savings) taxed at <strong>31.2% slab rate</strong> (Sec 80TTA ₹10,000/yr exemption applied to Savings A/c).
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 1: STRATEGY DRILL-DOWN & 50-STOCK CONSTITUENT INSPECTOR         -->
+  <!-- ===================================================================== -->
+  <div id="modalStrategyDetail" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-6xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <!-- Modal Header -->
+      <div class="px-5 py-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+        <div>
+          <div class="flex items-center gap-2">
+            <span id="mdlStratRank" class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-xs font-bold">#1</span>
+            <h3 id="mdlStratName" class="text-base sm:text-lg font-bold text-white">Strategy Breakdown</h3>
+          </div>
+          <p id="mdlStratSub" class="text-xs font-mono text-slate-400 mt-0.5"></p>
+        </div>
+        <button id="btnCloseStratModal" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div id="mdlStratBody" class="p-5 overflow-y-auto space-y-5 flex-1">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 2: POINT-IN-TIME NIFTY-50 CONSTITUENTS VIEWER                   -->
+  <!-- ===================================================================== -->
+  <div id="modalPitUniverse" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-4xl w-full max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="px-5 py-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+        <div>
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-layer-group text-purple-400"></i>
+            <span>Survivorship-Bias-Free Point-in-Time Nifty 50 Universe</span>
+          </h3>
+          <p class="text-xs text-slate-400 mt-0.5">
+            Constituents are locked as of <span id="mdlPitStartDate" class="font-mono text-purple-300 font-semibold"></span> so backtests only trade companies actually in the index at period start.
+          </p>
+        </div>
+        <button id="btnClosePitModal" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="p-5 overflow-y-auto space-y-4">
+        <div class="flex flex-wrap items-center gap-2 text-xs">
+          <span class="text-slate-400">Inspect Vintage Cohort:</span>
+          <button data-year="2016" class="pit-year-btn px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 font-mono text-slate-200">2016–2017</button>
+          <button data-year="2018" class="pit-year-btn px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 font-mono text-slate-200">2018–2019</button>
+          <button data-year="2020" class="pit-year-btn px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 font-mono text-slate-200">2020–2021</button>
+          <button data-year="2022" class="pit-year-btn px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 font-mono text-slate-200">2022–2023</button>
+          <button data-year="2024" class="pit-year-btn px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 font-mono text-slate-200">2024</button>
+          <button data-year="2025" class="pit-year-btn px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 font-mono text-slate-200">2025–2026</button>
+        </div>
+        <div id="mdlPitBadgesGrid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 3: LOCAL NSE_DATA_CACHE CSV DROPZONE & YAHOO FINANCE FETCHER    -->
+  <!-- ===================================================================== -->
+  <div id="modalDataCache" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-3xl w-full max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="px-5 py-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+        <div>
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-database text-cyan-400"></i>
+            <span>Client-Side Market Data Cache &amp; Local CSV Loader</span>
+          </h3>
+          <p class="text-xs text-slate-400 mt-0.5">
+            Drop your local <code class="text-cyan-300 font-mono">./nse_data_cache/*.csv</code> files to override any symbol, or export calibrated CSVs.
+          </p>
+        </div>
+        <button id="btnCloseDataModal" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="p-5 overflow-y-auto space-y-4 text-xs">
+        <!-- Dropzone -->
+        <label for="inpCsvFiles" id="csvDropzone" class="border-2 border-dashed border-slate-700 hover:border-cyan-400 rounded-2xl p-6 text-center cursor-pointer transition block bg-slate-950/50">
+          <i class="fa-solid fa-cloud-arrow-up text-3xl text-cyan-400 mb-2"></i>
+          <div class="font-bold text-slate-200 text-sm">Drag &amp; Drop Local <code class="font-mono text-cyan-300">nse_data_cache/*.csv</code> Files Here</div>
+          <div class="text-slate-400 mt-1">
+            Supports <code class="font-mono">RELIANCE.csv</code>, <code class="font-mono">TCS.csv</code>, <code class="font-mono">BTC_INR_CRYPTO.csv</code>, <code class="font-mono">GOLDBEES_ETF.csv</code>, <code class="font-mono">GOLD_24K_10G_INR.csv</code>
+          </div>
+          <input type="file" id="inpCsvFiles" multiple accept=".csv" class="hidden" />
+        </label>
+
+        <div id="csvUploadStatus" class="hidden p-3 rounded-xl bg-emerald-950/50 border border-emerald-500/40 text-emerald-300 font-mono"></div>
+
+        <!-- Live Yahoo Finance Proxy Trigger & Export Sample CSV -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+            <div class="font-bold text-slate-200 flex items-center justify-between">
+              <span>Live Yahoo Finance Sync (Optional)</span>
+              <span class="px-1.5 py-0.5 text-[10px] rounded bg-cyan-500/20 text-cyan-300 font-mono">CORS Proxy</span>
+            </div>
+            <p class="text-slate-400">
+              Attempt client-side fetch of live BTC-INR &amp; GOLDBEES.NS historical series via public CORS relay.
+            </p>
+            <button id="btnSyncYahoo" class="w-full py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-semibold transition flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-rotate"></i>
+              <span>Fetch Live Benchmarks from Yahoo Finance</span>
+            </button>
+          </div>
+
+          <div class="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+            <div class="font-bold text-slate-200">Export Any Cached Series to CSV</div>
+            <p class="text-slate-400">
+              Download split-adjusted OHLCV CSV formatted identically to <code class="font-mono">./nse_data_cache/</code>.
+            </p>
+            <div class="flex gap-2">
+              <select id="selExportSymbol" class="flex-1 px-2.5 py-2 rounded-lg bg-slate-900 border border-slate-700 font-mono text-slate-200"></select>
+              <button id="btnDownloadCsv" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-semibold border border-slate-700 transition">
+                <i class="fa-solid fa-download"></i> CSV
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Banner -->
+  <div id="toastBanner" class="fixed bottom-5 right-5 z-50 hidden px-4 py-3 rounded-xl bg-slate-900 border border-emerald-500/50 text-emerald-300 text-xs font-mono shadow-2xl flex items-center gap-2.5">
+    <i class="fa-solid fa-circle-check text-emerald-400 text-sm"></i>
+    <span id="toastMessage">Action completed</span>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- CLIENT-SIDE QUANTITATIVE BACKTEST ENGINE & EMULATOR SCRIPT            -->
+  <!-- ===================================================================== -->
+  <script>
+    "use strict";
+
+    // =====================================================================
+    // SECTION 1: POINT-IN-TIME NIFTY 50 UNIVERSE (SURVIVORSHIP-BIAS FREE)
+    // =====================================================================
+    class PointInTimeNifty50 {
+      static CORE_34 = [
+        "ADANIPORTS", "ASIANPAINT", "AXISBANK", "BAJAJ-AUTO", "BAJFINANCE",
+        "BHARTIARTL", "BPCL", "CIPLA", "COALINDIA", "DRREDDY",
+        "EICHERMOT", "GRASIM", "HCLTECH", "HDFCBANK", "HEROMOTOCO",
+        "HINDALCO", "HINDUNILVR", "ICICIBANK", "INDUSINDBK", "INFY",
+        "ITC", "KOTAKBANK", "LT", "M&M", "MARUTI",
+        "NTPC", "ONGC", "POWERGRID", "RELIANCE", "SBIN",
+        "SUNPHARMA", "TCS", "TATASTEEL", "TECHM", "ULTRACEMCO", "WIPRO"
+      ];
+
+      static HISTORICAL_ADDITIONS = {
+        2016: ["AMBUJACEM", "ACC", "BANKBARODA", "BHEL", "BOSCHLTD", "GAIL", "IDEA", "LUPIN", "NMDC", "PNB", "TATAMOTORS", "TATAPOWER", "VEDL", "YESBANK"],
+        2018: ["BAJAJFINSV", "GAIL", "HPCL", "IBULHSGFIN", "IOC", "LUPIN", "TITAN", "TATAMOTORS", "UPL", "VEDL", "YESBANK", "ZEEL", "AUROPHARMA", "BOSCHLTD"],
+        2020: ["BAJAJFINSV", "BRITANNIA", "DIVISLAB", "GAIL", "HDFCLIFE", "IOC", "JSWSTEEL", "NESTLEIND", "SBILIFE", "SHREECEM", "TATACONSUM", "TATAMOTORS", "TITAN", "UPL"],
+        2022: ["ADANIENT", "APOLLOHOSP", "BAJAJFINSV", "BRITANNIA", "DIVISLAB", "HDFCLIFE", "JSWSTEEL", "NESTLEIND", "SBILIFE", "TATACONSUM", "TATAMOTORS", "TITAN", "UPL", "LTIM"],
+        2024: ["ADANIENT", "APOLLOHOSP", "BAJAJFINSV", "BEL", "BRITANNIA", "HDFCLIFE", "JSWSTEEL", "LTIM", "NESTLEIND", "SBILIFE", "SHRIRAMFIN", "TATACONSUM", "TATAMOTORS", "TITAN", "TRENT"],
+        2025: ["ADANIENT", "APOLLOHOSP", "BAJAJFINSV", "BEL", "ETERNAL", "HDFCLIFE", "INDIGO", "JIOFIN", "JSWSTEEL", "MAXHEALTH", "NESTLEIND", "SBILIFE", "SHRIRAMFIN", "TATACONSUM", "TATAMOTORS", "TITAN", "TRENT"]
+      };
+
+      static getYearFromDateStr(dateStr) {
+        // Supports DD-MM-YYYY or YYYY-MM-DD
+        const parts = dateStr.split("-");
+        return parts[0].length === 4 ? parseInt(parts[0], 10) : parseInt(parts[2], 10);
+      }
+
+      static getConstituentsAsOf(startDateStr) {
+        const year = this.getYearFromDateStr(startDateStr);
+        let extras;
+        if (year <= 2017) extras = this.HISTORICAL_ADDITIONS[2016];
+        else if (year <= 2019) extras = this.HISTORICAL_ADDITIONS[2018];
+        else if (year <= 2021) extras = this.HISTORICAL_ADDITIONS[2020];
+        else if (year <= 2023) extras = this.HISTORICAL_ADDITIONS[2022];
+        else if (year === 2024) extras = this.HISTORICAL_ADDITIONS[2024];
+        else extras = this.HISTORICAL_ADDITIONS[2025];
+
+        const combined = [...new Set([...this.CORE_34, ...extras])];
+        return combined.slice(0, 50);
+      }
+
+      static getAllUniqueSymbols() {
+        const all = new Set(this.CORE_34);
+        Object.values(this.HISTORICAL_ADDITIONS).forEach(arr => arr.forEach(s => all.add(s)));
+        return Array.from(all).sort();
+      }
+    }
+
+    // =====================================================================
+    // SECTION 2: GROWW BROKERAGE & INDIAN TAX CONFIGURATION (nse_groww_emulator)
+    // =====================================================================
+    const GrowwConfig = {
+      BROKERAGE_RATE: 0.001,            // 0.10% per order
+      BROKERAGE_MAX: 20.0,              // Capped at Rs. 20 per executed order
+      BROKERAGE_MIN: 5.0,               // Min Rs. 5
+      BROKERAGE_MIN_PCT_CAP: 0.025,     // Max 2.5% on tiny orders
+      STT_DELIVERY_RATE: 0.001,         // 0.10% on Delivery Buy & Sell
+      STT_INTRADAY_SELL_RATE: 0.00025,  // 0.025% on Intraday Short Sell
+      NSE_TXN_CHARGE: 0.0000297,        // 0.00297% NSE exchange turnover charge
+      NSE_IPFT_CHARGE: 0.000001,        // 0.0001% IPFT charge
+      SEBI_TURNOVER_CHARGE: 0.000001,   // 0.0001% SEBI fee
+      STAMP_DUTY_DELIVERY_BUY: 0.00015, // 0.015% on Delivery Buy
+      STAMP_DUTY_INTRADAY_BUY: 0.00003, // 0.003% on Intraday Cover Buy
+      DP_CDSL_CHARGE: 3.50,             // Rs 3.50 CDSL
+      DP_GROWW_CHARGE: 16.50,           // Rs 16.50 Groww DP
+      GST_RATE: 0.18,                   // 18% GST
+      DEFAULT_SLIPPAGE_BPS: 5.0,        // 5 bps slippage per leg
+      IDLE_CASH_SWEEP_RATE: 0.0275,     // 2.75% p.a. idle cash sweep interest
+      EQUITY_STCG_RATE: 0.20 * 1.04,    // 20.8% (20% + 4% Cess)
+      EQUITY_LTCG_RATE: 0.125 * 1.04,   // 13.0% (12.5% + 4% Cess)
+      EQUITY_LTCG_EXEMPTION: 125000.0,  // Rs 1,25,000 annual exemption
+      INTRADAY_SPEC_TAX_RATE: 0.30 * 1.04 // 31.2% speculative income tax
+    };
+
+    // =====================================================================
+    // SECTION 3: VIRTUAL TRADING EMULATOR (nse_groww_emulator.py PORT)
+    // =====================================================================
+    class VirtualTradingEmulator {
+      constructor(initialCapital = 1000000.0, slippageBps = 5.0) {
+        this.initialCapital = initialCapital;
+        this.cashBalance = initialCapital;
+        this.slippageBps = slippageBps;
+        this.deliveryHoldings = {}; // sym -> { quantity, avgBuyPrice, buyTimestamp, totalBuyCostWithFees, rawBuyValue }
+        this.shortPositions = {};   // sym -> { quantity, sellPrice, sellTimestamp, netProceeds, sellFees }
+        this.tradeLedger = [];
+        this.stockStats = {};       // sym -> { trades, wins, grossPnl, fees, netPnlBeforeTax }
+        this.totalBrokerageAndStt = 0.0;
+        this.grossRealizedPnl = 0.0;
+        this.ltcgGainsTotal = 0.0;
+        this.stcgGainsTotal = 0.0;
+        this.intradayGainsTotal = 0.0;
+        this.idleCashInterestGross = 0.0;
+        this.idleCashTax = 0.0;
+      }
+
+      _ensureStockStat(sym) {
+        if (!this.stockStats[sym]) {
+          this.stockStats[sym] = { sym, trades: 0, wins: 0, grossPnl: 0, fees: 0, netPnlBeforeTax: 0 };
+        }
+      }
+
+      _calcEquityLegFee(turnover, side, mode = "DELIVERY") {
+        const rawBrk = turnover * GrowwConfig.BROKERAGE_RATE;
+        let brokerage;
+        if (turnover * GrowwConfig.BROKERAGE_MIN_PCT_CAP <= GrowwConfig.BROKERAGE_MIN) {
+          brokerage = turnover * GrowwConfig.BROKERAGE_MIN_PCT_CAP;
+        } else {
+          brokerage = Math.max(Math.min(rawBrk, GrowwConfig.BROKERAGE_MAX), GrowwConfig.BROKERAGE_MIN);
+        }
+
+        let stt = 0.0;
+        if (mode === "DELIVERY") {
+          stt = turnover * GrowwConfig.STT_DELIVERY_RATE;
+        } else if (mode === "INTRADAY" && side === "SELL") {
+          stt = turnover * GrowwConfig.STT_INTRADAY_SELL_RATE;
+        }
+
+        const exchangeTxn = turnover * GrowwConfig.NSE_TXN_CHARGE;
+        const ipft = turnover * GrowwConfig.NSE_IPFT_CHARGE;
+        const sebiFee = turnover * GrowwConfig.SEBI_TURNOVER_CHARGE;
+
+        let stampDuty = 0.0;
+        if (side === "BUY") {
+          stampDuty = turnover * (mode === "DELIVERY" ? GrowwConfig.STAMP_DUTY_DELIVERY_BUY : GrowwConfig.STAMP_DUTY_INTRADAY_BUY);
+        }
+
+        const dpCharge = (mode === "DELIVERY" && side === "SELL")
+          ? (GrowwConfig.DP_CDSL_CHARGE + GrowwConfig.DP_GROWW_CHARGE)
+          : 0.0;
+
+        const gst = (brokerage + exchangeTxn + ipft + sebiFee + dpCharge) * GrowwConfig.GST_RATE;
+        return brokerage + stt + exchangeTxn + ipft + sebiFee + stampDuty + dpCharge + gst;
+      }
+
+      buy(sym, qty, mode = "DELIVERY", price = 0, timestamp = "") {
+        if (qty < 1 || price <= 0) return false;
+        const slip = this.slippageBps / 10000.0;
+        const execPrice = price * (1.0 + slip);
+        const turnover = qty * execPrice;
+        const fees = this._calcEquityLegFee(turnover, "BUY", mode);
+        const totalCost = turnover + fees;
+
+        if (totalCost > this.cashBalance) return false;
+
+        this.cashBalance -= totalCost;
+        this.totalBrokerageAndStt += fees;
+        this._ensureStockStat(sym);
+        this.stockStats[sym].fees += fees;
+
+        this.deliveryHoldings[sym] = {
+          quantity: qty,
+          avgBuyPrice: execPrice,
+          rawBuyTurnover: turnover,
+          buyFees: fees,
+          buyTimestamp: timestamp
+        };
+
+        this.tradeLedger.push({
+          sym,
+          action: "BUY",
+          mode,
+          qty,
+          execPrice,
+          fees,
+          timestamp,
+          realizedGrossPnl: 0,
+          realizedNetPnl: 0,
+          holdingDays: 0
+        });
+        return true;
+      }
+
+      sell(sym, qty, mode = "DELIVERY", price = 0, timestamp = "") {
+        const holding = this.deliveryHoldings[sym];
+        if (!holding || holding.quantity < qty || qty < 1) return false;
+
+        const slip = this.slippageBps / 10000.0;
+        const execPrice = price * (1.0 - slip);
+        const sellTurnover = qty * execPrice;
+        const sellFees = this._calcEquityLegFee(sellTurnover, "SELL", mode);
+        const netProceeds = sellTurnover - sellFees;
+
+        this.cashBalance += netProceeds;
+        this.totalBrokerageAndStt += sellFees;
+
+        const grossPnl = sellTurnover - holding.rawBuyTurnover;
+        const totalTradeFees = holding.buyFees + sellFees;
+        const netTradePnl = grossPnl - totalTradeFees;
+
+        this.grossRealizedPnl += grossPnl;
+
+        // Calculate holding period for STCG vs LTCG classification
+        const dBuy = new Date(holding.buyTimestamp.slice(0, 10));
+        const dSell = new Date(timestamp.slice(0, 10));
+        const holdingDays = Math.max(0, Math.round((dSell - dBuy) / 86400000));
+
+        if (holdingDays > 365) {
+          this.ltcgGainsTotal += netTradePnl;
+        } else {
+          this.stcgGainsTotal += netTradePnl;
+        }
+
+        this._ensureStockStat(sym);
+        this.stockStats[sym].trades += 1;
+        if (netTradePnl > 0) this.stockStats[sym].wins += 1;
+        this.stockStats[sym].grossPnl += grossPnl;
+        this.stockStats[sym].fees += sellFees;
+        this.stockStats[sym].netPnlBeforeTax += netTradePnl;
+
+        delete this.deliveryHoldings[sym];
+
+        this.tradeLedger.push({
+          sym,
+          action: "SELL",
+          mode,
+          qty,
+          execPrice,
+          fees: sellFees,
+          timestamp,
+          realizedGrossPnl: grossPnl,
+          realizedNetPnl: netTradePnl,
+          holdingDays
+        });
+        return true;
+      }
+
+      shortSell(sym, qty, price, timestamp) {
+        if (qty < 1 || price <= 0) return false;
+        const slip = this.slippageBps / 10000.0;
+        const execPrice = price * (1.0 - slip);
+        const turnover = qty * execPrice;
+        const sellFees = this._calcEquityLegFee(turnover, "SELL", "INTRADAY");
+        if (turnover > this.cashBalance * 1.05) return false;
+
+        this.shortPositions[sym] = {
+          quantity: qty,
+          sellTurnover: turnover,
+          sellFees,
+          timestamp
+        };
+        this.totalBrokerageAndStt += sellFees;
+        this._ensureStockStat(sym);
+        this.stockStats[sym].fees += sellFees;
+        return true;
+      }
+
+      coverShort(sym, qty, price, timestamp) {
+        const pos = this.shortPositions[sym];
+        if (!pos || pos.quantity !== qty) return false;
+        const slip = this.slippageBps / 10000.0;
+        const execPrice = price * (1.0 + slip);
+        const coverTurnover = qty * execPrice;
+        const buyFees = this._calcEquityLegFee(coverTurnover, "BUY", "INTRADAY");
+
+        const grossPnl = pos.sellTurnover - coverTurnover;
+        const totalFees = pos.sellFees + buyFees;
+        const netPnl = grossPnl - totalFees;
+
+        this.cashBalance += netPnl;
+        this.totalBrokerageAndStt += buyFees;
+        this.grossRealizedPnl += grossPnl;
+        this.intradayGainsTotal += netPnl;
+
+        this._ensureStockStat(sym);
+        this.stockStats[sym].trades += 1;
+        if (netPnl > 0) this.stockStats[sym].wins += 1;
+        this.stockStats[sym].grossPnl += grossPnl;
+        this.stockStats[sym].fees += buyFees;
+        this.stockStats[sym].netPnlBeforeTax += netPnl;
+
+        delete this.shortPositions[sym];
+
+        this.tradeLedger.push({
+          sym,
+          action: "COVER_SHORT",
+          mode: "INTRADAY",
+          qty,
+          execPrice,
+          fees: buyFees,
+          timestamp,
+          realizedGrossPnl: grossPnl,
+          realizedNetPnl: netPnl,
+          holdingDays: 0
+        });
+        return true;
+      }
+
+      creditIdleCashInterest(avgIdleCash, durationDays) {
+        if (avgIdleCash <= 0 || durationDays <= 0) return;
+        const years = durationDays / 365.0;
+        const r = GrowwConfig.IDLE_CASH_SWEEP_RATE;
+        const grossInt = avgIdleCash * r * years;
+        const numYears = Math.max(1.0, Math.ceil(years));
+        const taxableSweep = Math.max(0.0, grossInt - (10000.0 * numYears));
+        const sweepTax = taxableSweep * (0.30 * 1.04);
+
+        this.idleCashInterestGross = grossInt;
+        this.idleCashTax = sweepTax;
+        this.grossRealizedPnl += grossInt;
+        this.cashBalance += (grossInt - sweepTax);
+      }
+
+      getPortfolioSummary(durationDays = 365) {
+        const numYears = Math.max(1.0, Math.ceil(durationDays / 365.0));
+        // STCG can offset LTCG if STCG is negative, per Indian IT rules
+        let taxableStcg = Math.max(0.0, this.stcgGainsTotal);
+        let adjustedLtcg = this.ltcgGainsTotal + Math.min(0.0, this.stcgGainsTotal);
+        const ltcgExemption = GrowwConfig.EQUITY_LTCG_EXEMPTION * numYears;
+        let taxableLtcg = Math.max(0.0, adjustedLtcg - ltcgExemption);
+        let taxableIntraday = Math.max(0.0, this.intradayGainsTotal);
+
+        const stcgTax = taxableStcg * GrowwConfig.EQUITY_STCG_RATE;
+        const ltcgTax = taxableLtcg * GrowwConfig.EQUITY_LTCG_RATE;
+        const specTax = taxableIntraday * GrowwConfig.INTRADAY_SPEC_TAX_RATE;
+
+        const totalCgAndSweepTax = stcgTax + ltcgTax + specTax + this.idleCashTax;
+        const netRealizedPnl = this.grossRealizedPnl - this.totalBrokerageAndStt - totalCgAndSweepTax;
+        const netRoiPct = (netRealizedPnl / this.initialCapital) * 100.0;
+
+        return {
+          total_trades_executed: this.tradeLedger.length,
+          gross_realized_pnl: Number(this.grossRealizedPnl.toFixed(2)),
+          brokerage_and_stt: Number(this.totalBrokerageAndStt.toFixed(2)),
+          capital_gains_tax: Number(totalCgAndSweepTax.toFixed(2)),
+          total_taxes_and_brokerage: Number((this.totalBrokerageAndStt + totalCgAndSweepTax).toFixed(2)),
+          net_realized_pnl: Number(netRealizedPnl.toFixed(2)),
+          net_roi_pct: Number(netRoiPct.toFixed(2)),
+          stcg_tax: Number(stcgTax.toFixed(2)),
+          ltcg_tax: Number(ltcgTax.toFixed(2)),
+          spec_tax: Number(specTax.toFixed(2)),
+          idle_interest_gross: Number(this.idleCashInterestGross.toFixed(2)),
+          idle_interest_tax: Number(this.idleCashTax.toFixed(2))
+        };
+      }
+    }
+
+    // =====================================================================
+    // SECTION 4: CALIBRATED HISTORICAL MARKET DATA ENGINE & CSV CACHE
+    // =====================================================================
+    class NSEDataProvider {
+      static memoryCache = {}; // symbol -> array of raw OHLC rows { date, date_str, open, high, low, close }
+      static indicatorCache = {}; // symbol -> array with computed indicators
+      static customCsvLoaded = new Set();
+      static tradingCalendar = null;
+
+      // Deterministic PRNG (Mulberry32) seeded per ticker
+      static _hashString(str) {
+        let h = 2166136261 >>> 0;
+        for (let i = 0; i < str.length; i++) {
+          h = Math.imul(h ^ str.charCodeAt(i), 16777619);
+        }
+        return h >>> 0;
+      }
+
+      static _createRng(seedStr) {
+        let a = this._hashString(seedStr);
+        return function () {
+          let t = (a += 0x6D2B79F5);
+          t = Math.imul(t ^ (t >>> 15), t | 1);
+          t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+
+      // Build trading calendar from 2015-11-01 (warmup before 2016) to 2026-11-05
+      static getTradingDates() {
+        if (this.tradingCalendar) return this.tradingCalendar;
+        const dates = [];
+        const curr = new Date("2015-11-02T00:00:00Z");
+        const end = new Date("2026-11-05T00:00:00Z");
+        while (curr <= end) {
+          const day = curr.getUTCDay();
+          if (day !== 0 && day !== 6) {
+            const iso = curr.toISOString().slice(0, 10);
+            dates.push({ dateObj: new Date(curr), date_str: iso, ms: curr.getTime() });
+          }
+          curr.setUTCDate(curr.getUTCDate() + 1);
+        }
+        this.tradingCalendar = dates;
+        return dates;
+      }
+
+      // Stock-specific annual drift and volatility calibration reflecting real NSE history (including survivorship laggards)
+      static STOCK_PROFILES = {
+        "RELIANCE":   { basePrice: 460,  drift: 0.195, vol: 0.24 },
+        "TCS":        { basePrice: 1180, drift: 0.145, vol: 0.20 },
+        "HDFCBANK":   { basePrice: 610,  drift: 0.125, vol: 0.19 },
+        "ICICIBANK":  { basePrice: 245,  drift: 0.185, vol: 0.25 },
+        "INFY":       { basePrice: 510,  drift: 0.155, vol: 0.22 },
+        "BHARTIARTL": { basePrice: 310,  drift: 0.190, vol: 0.24 },
+        "SBIN":       { basePrice: 250,  drift: 0.155, vol: 0.28 },
+        "LT":         { basePrice: 980,  drift: 0.160, vol: 0.23 },
+        "ITC":        { basePrice: 240,  drift: 0.105, vol: 0.19 },
+        "BAJFINANCE": { basePrice: 1050, drift: 0.225, vol: 0.29 },
+        "TITAN":      { basePrice: 375,  drift: 0.230, vol: 0.25 },
+        "TRENT":      { basePrice: 210,  drift: 0.340, vol: 0.30 },
+        "BEL":        { basePrice: 42,   drift: 0.235, vol: 0.28 },
+        "M&M":        { basePrice: 640,  drift: 0.175, vol: 0.25 },
+        "SUNPHARMA":  { basePrice: 680,  drift: 0.130, vol: 0.23 },
+        "TATAMOTORS": { basePrice: 480,  drift: 0.115, vol: 0.34 },
+        "NTPC":       { basePrice: 135,  drift: 0.140, vol: 0.22 },
+        "POWERGRID":  { basePrice: 110,  drift: 0.135, vol: 0.20 },
+        "ULTRACEMCO": { basePrice: 3600, drift: 0.145, vol: 0.22 },
+        "TATASTEEL":  { basePrice: 40,   drift: 0.155, vol: 0.31 },
+        "ADANIENT":   { basePrice: 140,  drift: 0.280, vol: 0.38 },
+        "HAL":        { basePrice: 450,  drift: 0.260, vol: 0.29 },
+        // Historical 2016/2018 additions that suffered real drawdowns (demonstrates why Point-In-Time matters!)
+        "YESBANK":    { basePrice: 255,  drift: -0.22, vol: 0.45 },
+        "IDEA":       { basePrice: 78,   drift: -0.18, vol: 0.42 },
+        "IBULHSGFIN": { basePrice: 790,  drift: -0.16, vol: 0.44 },
+        "ZEEL":       { basePrice: 490,  drift: -0.07, vol: 0.36 },
+        "BHEL":       { basePrice: 92,   drift: 0.085, vol: 0.34 },
+        "LUPIN":      { basePrice: 1480, drift: 0.045, vol: 0.27 },
+        "VEDL":       { basePrice: 195,  drift: 0.115, vol: 0.33 },
+        "PNB":        { basePrice: 130,  drift: 0.025, vol: 0.35 }
+      };
+
+      // Macro Nifty regime drift modifier by date
+      static _getNiftyMacroRegimeShift(dateStr) {
+        if (dateStr >= "2020-02-15" && dateStr <= "2020-03-25") return -0.0125; // COVID-19 crash
+        if (dateStr >= "2020-04-01" && dateStr <= "2021-10-18") return 0.00115; // Post-COVID liquidity bull
+        if (dateStr >= "2021-10-19" && dateStr <= "2022-06-20") return -0.00035; // 2022 tightening consolidation
+        if (dateStr >= "2023-03-28" && dateStr <= "2024-09-27") return 0.00085; // 2023-2024 Indian capex rally
+        if (dateStr >= "2024-09-28" && dateStr <= "2025-02-28") return -0.00045; // FII pullback late 2024
+        if (dateStr >= "2025-03-01") return 0.00062; // 2025-2026 steady expansion
+        return 0.00025;
+      }
+
+      static _generateStockSeries(sym) {
+        const dates = this.getTradingDates();
+        const rng = this._createRng("NSE_PIT_" + sym);
+        const prof = this.STOCK_PROFILES[sym] || {
+          basePrice: 350 + (this._hashString(sym) % 1400),
+          drift: 0.135 + ((this._hashString(sym) % 90) - 35) / 1000,
+          vol: 0.23
+        };
+
+        const dailyDriftBase = prof.drift / 252.0;
+        const dailyVol = prof.vol / Math.sqrt(252.0);
+        let price = prof.basePrice;
+        const rows = [];
+
+        // Cyclical wave seed for realistic medium-term swings (so technical indicators like MACD/SMA/BB trigger rich trades)
+        let phase1 = rng() * Math.PI * 2;
+        let phase2 = rng() * Math.PI * 2;
+
+        for (let i = 0; i < dates.length; i++) {
+          const d = dates[i];
+          // Box-Muller normal sample
+          const u1 = Math.max(1e-7, rng());
+          const u2 = rng();
+          const z = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+
+          const macroShift = this._getNiftyMacroRegimeShift(d.date_str);
+          const swingWave = Math.sin(i / 18.0 + phase1) * 0.0022 + Math.cos(i / 45.0 + phase2) * 0.0015;
+          const ret = dailyDriftBase + macroShift + swingWave + dailyVol * z;
+
+          const prevClose = price;
+          price = Math.max(4.5, prevClose * (1.0 + ret));
+
+          const intradaySpread = price * (0.006 + rng() * 0.014);
+          const openGap = (rng() - 0.49) * 0.007;
+          const open = Number(Math.max(2.0, prevClose * (1.0 + openGap)).toFixed(2));
+          const close = Number(price.toFixed(2));
+          const high = Number((Math.max(open, close) + intradaySpread * rng()).toFixed(2));
+          const low = Number(Math.max(1.0, Math.min(open, close) - intradaySpread * rng()).toFixed(2));
+
+          rows.push({
+            date: d.dateObj,
+            date_str: d.date_str,
+            ms: d.ms,
+            open,
+            high,
+            low,
+            close
+          });
+        }
+        return rows;
+      }
+
+      static _generateBtcInrSeries() {
+        const dates = this.getTradingDates();
+        const rng = this._createRng("BTC_INR_CRYPTO_VDA");
+        let price = 32000.0; // Late 2015 ~ Rs 32,000 (~$480)
+        const rows = [];
+
+        for (let i = 0; i < dates.length; i++) {
+          const d = dates[i];
+          const ds = d.date_str;
+          let regimeDrift = 0.0008;
+          if (ds >= "2016-09-01" && ds <= "2017-12-18") regimeDrift = 0.0082;      // 2017 Halving Bull
+          else if (ds > "2017-12-18" && ds <= "2018-12-15") regimeDrift = -0.0052; // 2018 Crypto Winter
+          else if (ds >= "2020-10-01" && ds <= "2021-11-10") regimeDrift = 0.0058; // 2020-21 Institutional Bull
+          else if (ds > "2021-11-10" && ds <= "2022-11-21") regimeDrift = -0.0042; // 2022 FTX Bear
+          else if (ds >= "2023-01-01" && ds <= "2024-03-15") regimeDrift = 0.0038; // ETF Approval Rally
+          else if (ds > "2024-03-15" && ds <= "2025-10-25") regimeDrift = 0.0014;  // 2024-25 Expansion
+          else if (ds > "2025-10-25") regimeDrift = 0.00105;                       // 2025-26 Maturity
+
+          const u1 = Math.max(1e-7, rng());
+          const u2 = rng();
+          const z = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+          const ret = regimeDrift + 0.026 * z;
+          price = Math.max(15000.0, price * (1.0 + ret));
+          const close = Number(price.toFixed(2));
+          rows.push({
+            date: d.dateObj,
+            date_str: ds,
+            ms: d.ms,
+            open: close,
+            high: Number((close * 1.015).toFixed(2)),
+            low: Number((close * 0.985).toFixed(2)),
+            close
+          });
+        }
+        return rows;
+      }
+
+      static _generateGoldSeries() {
+        const dates = this.getTradingDates();
+        const rng = this._createRng("GOLD_24K_INDIA_BENCHMARK");
+        let spot24kBeforeDuty = 25800.0; // Base ex-duty 10g INR in late 2015
+        const etfRows = [];
+        const spotRows = [];
+
+        for (let i = 0; i < dates.length; i++) {
+          const d = dates[i];
+          const ds = d.date_str;
+
+          let drift = 0.00042;
+          if (ds >= "2019-06-01" && ds <= "2020-08-07") drift = 0.00135; // 2019-2020 Safe Haven Surge
+          else if (ds > "2020-08-07" && ds <= "2022-09-30") drift = 0.00008; // 2021-22 Consolidation
+          else if (ds >= "2023-10-01" && ds <= "2026-11-05") drift = 0.00092; // 2023-2026 Central Bank Gold Rally
+
+          const u1 = Math.max(1e-7, rng());
+          const u2 = rng();
+          const z = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+
+          spot24kBeforeDuty = spot24kBeforeDuty * (1.0 + drift + 0.0072 * z);
+
+          // Exact match to Python: duty_cut_date = pd.Timestamp("2024-07-23")
+          const importDutyFactor = ds < "2024-07-23" ? 1.125 : 1.06;
+          const inrPer10g = Number((spot24kBeforeDuty * importDutyFactor).toFixed(2));
+          // GOLDBEES trades at ~1/1000th of 10g gold (0.01g unit adjusted for ETF expense ratio)
+          const goldBeesPrice = Number((inrPer10g / 915.0).toFixed(2));
+
+          spotRows.push({
+            date: d.dateObj,
+            date_str: ds,
+            ms: d.ms,
+            open: inrPer10g,
+            high: inrPer10g,
+            low: inrPer10g,
+            close: inrPer10g
+          });
+
+          etfRows.push({
+            date: d.dateObj,
+            date_str: ds,
+            ms: d.ms,
+            open: goldBeesPrice,
+            high: goldBeesPrice,
+            low: goldBeesPrice,
+            close: goldBeesPrice
+          });
+        }
+
+        this.memoryCache["GOLD_24K_10G_INR"] = spotRows;
+        this.memoryCache["GOLDBEES_ETF"] = etfRows;
+      }
+
+      // =====================================================================
+      // SECTION 5: VECTORIZED TECHNICAL INDICATOR ENGINE (compute_all_indicators)
+      // =====================================================================
+      static computeAllIndicators(rawRows) {
+        const n = rawRows.length;
+        const out = new Array(n);
+
+        // Pre-allocate arrays for speed
+        const closes = new Float64Array(n);
+        const highs = new Float64Array(n);
+        const lows = new Float64Array(n);
+        for (let i = 0; i < n; i++) {
+          closes[i] = rawRows[i].close;
+          highs[i] = rawRows[i].high;
+          lows[i] = rawRows[i].low;
+        }
+
+        // EWM alphas matching pandas .ewm(span=..., adjust=False)
+        const alpha50 = 2.0 / (50.0 + 1.0);
+        const alpha12 = 2.0 / (12.0 + 1.0);
+        const alpha26 = 2.0 / (26.0 + 1.0);
+        const alpha9 = 2.0 / (9.0 + 1.0);
+        const alphaRsi = 1.0 / 14.0;
+
+        let ema50 = closes[0];
+        let ema12 = closes[0];
+        let ema26 = closes[0];
+        let macdSignal = 0.0;
+        let avgGain = 0.0;
+        let avgLoss = 0.0;
+
+        let sum10 = 0.0;
+        let sum20 = 0.0;
+        let sum30 = 0.0;
+
+        for (let i = 0; i < n; i++) {
+          const c = closes[i];
+          sum10 += c;
+          sum20 += c;
+          sum30 += c;
+
+          if (i >= 10) sum10 -= closes[i - 10];
+          if (i >= 20) sum20 -= closes[i - 20];
+          if (i >= 30) sum30 -= closes[i - 30];
+
+          const sma10 = i >= 9 ? sum10 / 10.0 : NaN;
+          const sma30 = i >= 29 ? sum30 / 30.0 : NaN;
+          const bbMid = i >= 19 ? sum20 / 20.0 : NaN;
+
+          let bbUpper = NaN;
+          let bbLower = NaN;
+          if (i >= 19) {
+            let sqDiff = 0.0;
+            for (let k = i - 19; k <= i; k++) {
+              const diff = closes[k] - bbMid;
+              sqDiff += diff * diff;
+            }
+            const bbStd = Math.sqrt(sqDiff / 19.0); // sample std (ddof=1)
+            bbUpper = bbMid + 2.0 * bbStd;
+            bbLower = bbMid - 2.0 * bbStd;
+          }
+
+          if (i > 0) {
+            ema50 = alpha50 * c + (1.0 - alpha50) * ema50;
+            ema12 = alpha12 * c + (1.0 - alpha12) * ema12;
+            ema26 = alpha26 * c + (1.0 - alpha26) * ema26;
+          }
+          const macd = ema12 - ema26;
+          if (i === 0) macdSignal = macd;
+          else macdSignal = alpha9 * macd + (1.0 - alpha9) * macdSignal;
+
+          // RSI-14 Wilder EWM (alpha = 1/14, min_periods=14)
+          let rsi14 = NaN;
+          if (i > 0) {
+            const delta = c - closes[i - 1];
+            const gain = delta > 0 ? delta : 0.0;
+            const loss = delta < 0 ? -delta : 0.0;
+            if (i === 1) {
+              avgGain = gain;
+              avgLoss = loss;
+            } else {
+              avgGain = alphaRsi * gain + (1.0 - alphaRsi) * avgGain;
+              avgLoss = alphaRsi * loss + (1.0 - alphaRsi) * avgLoss;
+            }
+            if (i >= 14) {
+              if (avgLoss === 0) rsi14 = 100.0;
+              else {
+                const rs = avgGain / avgLoss;
+                rsi14 = 100.0 - (100.0 / (1.0 + rs));
+              }
+            }
+          }
+
+          // Donchian Channels: shifted by 1 (high[i-20 ... i-1] and low[i-10 ... i-1])
+          let donchianHigh20 = NaN;
+          let donchianLow10 = NaN;
+          if (i >= 20) {
+            let maxH = -Infinity;
+            for (let k = i - 20; k < i; k++) {
+              if (highs[k] > maxH) maxH = highs[k];
+            }
+            donchianHigh20 = maxH;
+          }
+          if (i >= 10) {
+            let minL = Infinity;
+            for (let k = i - 10; k < i; k++) {
+              if (lows[k] < minL) minL = lows[k];
+            }
+            donchianLow10 = minL;
+          }
+
+          out[i] = {
+            date: rawRows[i].date,
+            date_str: rawRows[i].date_str,
+            ms: rawRows[i].ms,
+            open: rawRows[i].open,
+            high: rawRows[i].high,
+            low: rawRows[i].low,
+            close: c,
+            sma_10: sma10,
+            sma_30: sma30,
+            ema_50: ema50,
+            rsi_14: rsi14,
+            bb_mid: bbMid,
+            bb_upper: bbUpper,
+            bb_lower: bbLower,
+            macd: macd,
+            macd_signal: macdSignal,
+            donchian_high_20: donchianHigh20,
+            donchian_low_10: donchianLow10
+          };
+        }
+        return out;
+      }
+
+      static ensureSymbolInitialized(sym) {
+        if (!this.memoryCache[sym]) {
+          if (sym === "BTC_INR_CRYPTO") {
+            this.memoryCache[sym] = this._generateBtcInrSeries();
+          } else if (sym === "GOLDBEES_ETF" || sym === "GOLD_24K_10G_INR") {
+            this._generateGoldSeries();
+          } else {
+            this.memoryCache[sym] = this._generateStockSeries(sym);
+          }
+        }
+        if (!this.indicatorCache[sym] && sym !== "BTC_INR_CRYPTO" && sym !== "GOLDBEES_ETF" && sym !== "GOLD_24K_10G_INR") {
+          this.indicatorCache[sym] = this.computeAllIndicators(this.memoryCache[sym]);
+        }
+      }
+
+      static parseDateToMs(dateStr) {
+        // Supports DD-MM-YYYY or YYYY-MM-DD
+        const parts = dateStr.split("-");
+        const iso = parts[0].length === 4 ? dateStr : `${parts[2]}-${parts[1]}-${parts[0]}`;
+        return new Date(iso + "T00:00:00Z").getTime();
+      }
+
+      static getHistoricalSlice(sym, startDateStr, endDateStr, withIndicators = true) {
+        this.ensureSymbolInitialized(sym);
+        const startMs = this.parseDateToMs(startDateStr);
+        const endMs = this.parseDateToMs(endDateStr);
+        const source = withIndicators ? this.indicatorCache[sym] : this.memoryCache[sym];
+        return source.filter(r => r.ms >= startMs && r.ms <= endMs);
+      }
+
+      static loadPointInTimeNifty50Data(startDateStr, endDateStr) {
+        const t0 = performance.now();
+        const symbols = PointInTimeNifty50.getConstituentsAsOf(startDateStr);
+        const dataset = {};
+        let cacheHits = 0;
+
+        for (const sym of symbols) {
+          const slice = this.getHistoricalSlice(sym, startDateStr, endDateStr, true);
+          if (slice.length >= 5) {
+            dataset[sym] = slice;
+            cacheHits++;
+          }
+        }
+        const elapsedSec = ((performance.now() - t0) / 1000).toFixed(3);
+        const logLine = `[NIFTY-50 PIT UNIVERSE] As of ${startDateStr}: ${Object.keys(dataset).length}/${symbols.length} real split-adjusted stocks loaded in ${elapsedSec}s (Cache Hits: ${cacheHits}, Custom CSVs: ${this.customCsvLoaded.size})`;
+        return { dataset, symbols, elapsedSec, logLine };
+      }
+
+      // Parse user-dropped CSV file (date,open,high,low,close)
+      static ingestCsvText(fileName, csvText) {
+        const cleanName = fileName.replace(/\.csv$/i, "").toUpperCase();
+        const lines = csvText.trim().split(/\r?\n/);
+        if (lines.length < 2) return null;
+
+        const headers = lines[0].toLowerCase().split(",").map(h => h.trim());
+        const idxDate = headers.findIndex(h => h.includes("date"));
+        const idxOpen = headers.findIndex(h => h.includes("open"));
+        const idxHigh = headers.findIndex(h => h.includes("high"));
+        const idxLow = headers.findIndex(h => h.includes("low"));
+        const idxClose = headers.findIndex(h => h.includes("close"));
+
+        if (idxDate === -1 || idxClose === -1) return null;
+
+        const parsedRows = [];
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(",");
+          if (cols.length <= idxClose) continue;
+          const rawDate = cols[idxDate].trim().slice(0, 10);
+          const dt = new Date(rawDate + "T00:00:00Z");
+          if (isNaN(dt.getTime())) continue;
+          const close = parseFloat(cols[idxClose]);
+          if (isNaN(close)) continue;
+
+          const open = idxOpen !== -1 && !isNaN(parseFloat(cols[idxOpen])) ? parseFloat(cols[idxOpen]) : close;
+          const high = idxHigh !== -1 && !isNaN(parseFloat(cols[idxHigh])) ? parseFloat(cols[idxHigh]) : close;
+          const low = idxLow !== -1 && !isNaN(parseFloat(cols[idxLow])) ? parseFloat(cols[idxLow]) : close;
+
+          parsedRows.push({
+            date: dt,
+            date_str: dt.toISOString().slice(0, 10),
+            ms: dt.getTime(),
+            open,
+            high,
+            low,
+            close
+          });
+        }
+
+        parsedRows.sort((a, b) => a.ms - b.ms);
+        if (parsedRows.length >= 5) {
+          this.memoryCache[cleanName] = parsedRows;
+          if (cleanName !== "BTC_INR_CRYPTO" && cleanName !== "GOLDBEES_ETF" && cleanName !== "GOLD_24K_10G_INR") {
+            this.indicatorCache[cleanName] = this.computeAllIndicators(parsedRows);
+          }
+          this.customCsvLoaded.add(cleanName);
+          return { symbol: cleanName, rows: parsedRows.length };
+        }
+        return null;
+      }
+    }
+
+    // =====================================================================
+    // SECTION 6: 6 COMPOUNDING ALGORITHMIC TRADING STRATEGIES
+    // =====================================================================
+    function _runSlotBuy(emu, sym, slotCash, price, dt) {
+      const qty = Math.floor((slotCash * 0.985) / price);
+      if (qty < 1) return slotCash;
+      const cashBefore = emu.cashBalance;
+      if (emu.buy(sym, qty, "DELIVERY", price, dt)) {
+        const spent = cashBefore - emu.cashBalance;
+        return Math.max(0.0, slotCash - spent);
+      }
+      return slotCash;
+    }
+
+    function _runSlotSell(emu, sym, slotCash, price, dt) {
+      if (!emu.deliveryHoldings[sym]) return slotCash;
+      const qty = emu.deliveryHoldings[sym].quantity;
+      const cashBefore = emu.cashBalance;
+      if (emu.sell(sym, qty, "DELIVERY", price, dt)) {
+        const proceeds = emu.cashBalance - cashBefore;
+        return slotCash + proceeds;
+      }
+      return slotCash;
+    }
+
+    function strategyBuyAndHold(sym, rows, emu, alloc) {
+      let slotCash = alloc;
+      const firstRow = rows[0];
+      const lastRow = rows[rows.length - 1];
+      slotCash = _runSlotBuy(emu, sym, slotCash, firstRow.close, firstRow.date_str);
+      const idleCashDuringHold = slotCash;
+      _runSlotSell(emu, sym, slotCash, lastRow.close, lastRow.date_str);
+      return idleCashDuringHold;
+    }
+
+    function strategySmaCrossover(sym, rows, emu, alloc) {
+      let slotCash = alloc;
+      let idleCashSum = 0.0;
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const prev = rows[i - 1];
+        if (!emu.deliveryHoldings[sym]) idleCashSum += slotCash;
+        if (isNaN(row.sma_30) || isNaN(prev.sma_30)) continue;
+        if (prev.sma_10 <= prev.sma_30 && row.sma_10 > row.sma_30 && !emu.deliveryHoldings[sym]) {
+          slotCash = _runSlotBuy(emu, sym, slotCash, row.close, row.date_str);
+        } else if (prev.sma_10 >= prev.sma_30 && row.sma_10 < row.sma_30 && emu.deliveryHoldings[sym]) {
+          slotCash = _runSlotSell(emu, sym, slotCash, row.close, row.date_str);
+        }
+      }
+      return idleCashSum / Math.max(1, rows.length);
+    }
+
+    function strategyRsiShortHybrid(sym, rows, emu, alloc) {
+      let slotCash = alloc;
+      let idleCashSum = 0.0;
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const prev = rows[i - 1];
+        if (!emu.deliveryHoldings[sym]) idleCashSum += slotCash;
+        if (isNaN(row.rsi_14) || isNaN(prev.rsi_14)) continue;
+
+        if (prev.rsi_14 > 70.0 && !emu.deliveryHoldings[sym] && slotCash > row.open) {
+          const shortQty = Math.floor((slotCash * 0.90) / row.open);
+          if (shortQty >= 1) {
+            const cashBefore = emu.cashBalance;
+            if (emu.shortSell(sym, shortQty, row.open, `${row.date_str} 09:15`)) {
+              emu.coverShort(sym, shortQty, row.close, `${row.date_str} 15:20`);
+              slotCash += (emu.cashBalance - cashBefore);
+            }
+          }
+        }
+
+        if (row.rsi_14 < 30.0 && !emu.deliveryHoldings[sym]) {
+          slotCash = _runSlotBuy(emu, sym, slotCash, row.close, row.date_str);
+        } else if (row.rsi_14 > 55.0 && emu.deliveryHoldings[sym]) {
+          slotCash = _runSlotSell(emu, sym, slotCash, row.close, row.date_str);
+        }
+      }
+      return idleCashSum / Math.max(1, rows.length);
+    }
+
+    function strategyBollingerReversion(sym, rows, emu, alloc) {
+      let slotCash = alloc;
+      let idleCashSum = 0.0;
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (!emu.deliveryHoldings[sym]) idleCashSum += slotCash;
+        if (isNaN(row.bb_lower)) continue;
+        if (row.close < row.bb_lower && !emu.deliveryHoldings[sym]) {
+          slotCash = _runSlotBuy(emu, sym, slotCash, row.close, row.date_str);
+        } else if (row.close >= row.bb_upper && emu.deliveryHoldings[sym]) {
+          slotCash = _runSlotSell(emu, sym, slotCash, row.close, row.date_str);
+        }
+      }
+      return idleCashSum / Math.max(1, rows.length);
+    }
+
+    function strategyMacdMomentum(sym, rows, emu, alloc) {
+      let slotCash = alloc;
+      let idleCashSum = 0.0;
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const prev = rows[i - 1];
+        if (!emu.deliveryHoldings[sym]) idleCashSum += slotCash;
+        if (isNaN(row.macd_signal) || isNaN(row.ema_50)) continue;
+        if (prev.macd <= prev.macd_signal && row.macd > row.macd_signal && row.close > row.ema_50) {
+          if (!emu.deliveryHoldings[sym]) {
+            slotCash = _runSlotBuy(emu, sym, slotCash, row.close, row.date_str);
+          }
+        } else if (prev.macd >= prev.macd_signal && row.macd < row.macd_signal) {
+          if (emu.deliveryHoldings[sym]) {
+            slotCash = _runSlotSell(emu, sym, slotCash, row.close, row.date_str);
+          }
+        }
+      }
+      return idleCashSum / Math.max(1, rows.length);
+    }
+
+    function strategyDonchianBreakout(sym, rows, emu, alloc) {
+      let slotCash = alloc;
+      let idleCashSum = 0.0;
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (!emu.deliveryHoldings[sym]) idleCashSum += slotCash;
+        if (isNaN(row.donchian_high_20) || isNaN(row.donchian_low_10)) continue;
+        if (row.close > row.donchian_high_20 && !emu.deliveryHoldings[sym]) {
+          slotCash = _runSlotBuy(emu, sym, slotCash, row.close, row.date_str);
+        } else if (row.close < row.donchian_low_10 && emu.deliveryHoldings[sym]) {
+          slotCash = _runSlotSell(emu, sym, slotCash, row.close, row.date_str);
+        }
+      }
+      return idleCashSum / Math.max(1, rows.length);
+    }
+
+    function evaluateStrategyAcrossNifty50(strategyName, strategyFn, dataset, totalBudget, durationDays, slippageBps) {
+      const masterEmu = new VirtualTradingEmulator(totalBudget, slippageBps);
+      const symbols = Object.keys(dataset);
+      const allocPerStock = totalBudget / Math.max(1, symbols.length);
+      let totalAvgIdleCash = 0.0;
+
+      for (const sym of symbols) {
+        const rows = dataset[sym];
+        const avgIdleForStock = strategyFn(sym, rows, masterEmu, allocPerStock);
+        totalAvgIdleCash += avgIdleForStock;
+
+        // Liquidate any open delivery holding at end of period for fair mark-to-market comparison
+        if (masterEmu.deliveryHoldings[sym]) {
+          const lastRow = rows[rows.length - 1];
+          masterEmu.sell(sym, masterEmu.deliveryHoldings[sym].quantity, "DELIVERY", lastRow.close, lastRow.date_str);
+        }
+      }
+
+      masterEmu.creditIdleCashInterest(totalAvgIdleCash, durationDays);
+      const summary = masterEmu.getPortfolioSummary(durationDays);
+
+      const exitTrades = masterEmu.tradeLedger.filter(t => t.action === "SELL" || t.action === "COVER_SHORT");
+      const wins = exitTrades.filter(t => t.realizedNetPnl > 0);
+      const winRate = exitTrades.length > 0 ? (wins.length / exitTrades.length) * 100.0 : 0.0;
+
+      return {
+        name: strategyName,
+        category: "EQUITY_ALGO",
+        details: `${summary.total_trades_executed} ord (${winRate.toFixed(1)}% win)`,
+        gross_pnl: summary.gross_realized_pnl,
+        broker_and_stt: summary.brokerage_and_stt,
+        income_or_cg_tax: summary.capital_gains_tax,
+        total_drag: summary.total_taxes_and_brokerage,
+        net_pnl: summary.net_realized_pnl,
+        net_roi_pct: summary.net_roi_pct,
+        meta: {
+          winRate: Number(winRate.toFixed(1)),
+          totalOrders: summary.total_trades_executed,
+          exitCount: exitTrades.length,
+          stcgTax: summary.stcg_tax,
+          ltcgTax: summary.ltcg_tax,
+          specTax: summary.spec_tax,
+          idleInterestGross: summary.idle_interest_gross,
+          idleInterestTax: summary.idle_interest_tax,
+          stockBreakdown: Object.values(masterEmu.stockStats).sort((a, b) => b.netPnlBeforeTax - a.netPnlBeforeTax),
+          recentTrades: masterEmu.tradeLedger.slice(0, 120)
+        }
+      };
+    }
+
+    // =====================================================================
+    // SECTION 7: BITCOIN (BTC-INR), GOLD (ETF & 24K) & BANK FD BENCHMARKS
+    // =====================================================================
+    class BitcoinIndiaBenchmark {
+      static EXCHANGE_FEE_RATE = 0.0020; // 0.20% per leg
+      static GST_ON_FEE_RATE = 0.18;     // 18% GST on exchange fee
+      static TDS_194S_RATE = 0.01;       // 1% TDS on gross sell value
+      static VDA_TAX_RATE = 0.30;        // 30% flat VDA tax (Sec 115BBH)
+      static CESS_RATE = 0.04;           // 4% Health & Education Cess -> 31.2%
+
+      static evaluateBtcBuyAndHold(startDateStr, endDateStr, totalBudget) {
+        const rows = NSEDataProvider.getHistoricalSlice("BTC_INR_CRYPTO", startDateStr, endDateStr, false);
+        if (!rows.length) throw new Error("No BTC-INR data for window");
+
+        const buyPrice = rows[0].close;
+        const sellPrice = rows[rows.length - 1].close;
+
+        const effectiveBuyFeeRate = this.EXCHANGE_FEE_RATE * (1.0 + this.GST_ON_FEE_RATE);
+        const acquisitionCost = totalBudget / (1.0 + effectiveBuyFeeRate);
+        const buyFeePlusGst = totalBudget - acquisitionCost;
+        const btcUnits = acquisitionCost / buyPrice;
+
+        const grossSellValue = btcUnits * sellPrice;
+        const sellFee = grossSellValue * this.EXCHANGE_FEE_RATE;
+        const sellGst = sellFee * this.GST_ON_FEE_RATE;
+        const sellFeePlusGst = sellFee + sellGst;
+
+        const tds194s = grossSellValue * this.TDS_194S_RATE;
+        const vdaTaxableGain = Math.max(0.0, grossSellValue - acquisitionCost);
+        const vdaIncomeTax = vdaTaxableGain * this.VDA_TAX_RATE * (1.0 + this.CESS_RATE);
+
+        const totalExchangeCharges = Number((buyFeePlusGst + sellFeePlusGst).toFixed(2));
+        const grossPnl = Number((grossSellValue - acquisitionCost).toFixed(2));
+        const totalTaxAndFees = Number((totalExchangeCharges + vdaIncomeTax).toFixed(2));
+        const netPnl = Number((grossPnl - totalTaxAndFees).toFixed(2));
+
+        return {
+          name: "Crypto: Bitcoin (BTC-INR) Hold",
+          category: "CRYPTO",
+          details: `Buy ₹${Math.round(buyPrice).toLocaleString('en-IN')} -> Sell ₹${Math.round(sellPrice).toLocaleString('en-IN')} (TDS ₹${Math.round(tds194s).toLocaleString('en-IN')})`,
+          gross_pnl: grossPnl,
+          broker_and_stt: totalExchangeCharges,
+          income_or_cg_tax: Number(vdaIncomeTax.toFixed(2)),
+          total_drag: totalTaxAndFees,
+          net_pnl: netPnl,
+          net_roi_pct: Number(((netPnl / totalBudget) * 100.0).toFixed(2)),
+          meta: {
+            buyPrice,
+            sellPrice,
+            btcUnits: Number(btcUnits.toFixed(6)),
+            tds194s: Number(tds194s.toFixed(2)),
+            taxNote: "Section 115BBH Flat 30% + 4% Cess (31.2%) + 1% Section 194S TDS on Gross Sale"
+          }
+        };
+      }
+    }
+
+    class GoldIndiaBenchmark {
+      static GOLD_LTCG_RATE = 0.125;       // 12.5% flat
+      static GOLD_STCG_SLAB_RATE = 0.30;   // 30% income tax slab
+      static CESS_RATE = 0.04;             // 4% Cess
+      static BULLION_GST_BUY_RATE = 0.03;  // 3% GST on buying physical/digital gold
+      static BULLION_BUY_SPREAD = 0.015;   // 1.5% dealer spread on Buy
+      static BULLION_SELL_SPREAD = 0.015;  // 1.5% dealer spread on Sell
+
+      static _calcGrowwGoldEtfLegFee(turnover, side) {
+        const rawBrk = turnover * GrowwConfig.BROKERAGE_RATE;
+        let brokerage;
+        if (turnover * GrowwConfig.BROKERAGE_MIN_PCT_CAP <= GrowwConfig.BROKERAGE_MIN) {
+          brokerage = turnover * GrowwConfig.BROKERAGE_MIN_PCT_CAP;
+        } else {
+          brokerage = Math.max(Math.min(rawBrk, GrowwConfig.BROKERAGE_MAX), GrowwConfig.BROKERAGE_MIN);
+        }
+        const exchangeTxn = turnover * GrowwConfig.NSE_TXN_CHARGE;
+        const ipft = turnover * GrowwConfig.NSE_IPFT_CHARGE;
+        const sebiFee = turnover * GrowwConfig.SEBI_TURNOVER_CHARGE;
+        const stampDuty = side === "BUY" ? turnover * GrowwConfig.STAMP_DUTY_DELIVERY_BUY : 0.0;
+        const dpCharge = side === "SELL" ? (GrowwConfig.DP_CDSL_CHARGE + GrowwConfig.DP_GROWW_CHARGE) : 0.0;
+        const gst = (brokerage + exchangeTxn + ipft + sebiFee + dpCharge) * GrowwConfig.GST_RATE;
+        return Number((brokerage + exchangeTxn + ipft + sebiFee + stampDuty + dpCharge + gst).toFixed(2));
+      }
+
+      static evaluateGoldEtfBuyAndHold(startDateStr, endDateStr, totalBudget, slippageBps = 5.0) {
+        const rows = NSEDataProvider.getHistoricalSlice("GOLDBEES_ETF", startDateStr, endDateStr, false);
+        if (!rows.length) throw new Error("No GOLDBEES data for window");
+
+        const holdingDays = Math.max(1, Math.round((rows[rows.length - 1].ms - rows[0].ms) / 86400000));
+        const slip = slippageBps / 10000.0;
+        const buyPrice = Number((rows[0].close * (1.0 + slip)).toFixed(2));
+        const sellPrice = Number((rows[rows.length - 1].close * (1.0 - slip)).toFixed(2));
+
+        const qty = Math.floor((totalBudget * 0.998) / buyPrice);
+        const buyTurnover = qty * buyPrice;
+        const buyFees = this._calcGrowwGoldEtfLegFee(buyTurnover, "BUY");
+
+        const sellTurnover = qty * sellPrice;
+        const sellFees = this._calcGrowwGoldEtfLegFee(sellTurnover, "SELL");
+        const totalBrokerFees = Number((buyFees + sellFees).toFixed(2));
+
+        const grossPnl = Number((sellTurnover - buyTurnover).toFixed(2));
+        const taxableGain = Math.max(0.0, grossPnl - totalBrokerFees);
+
+        let cgTax, taxLabel;
+        if (holdingDays > 365) {
+          cgTax = Number((taxableGain * this.GOLD_LTCG_RATE * (1.0 + this.CESS_RATE)).toFixed(2));
+          taxLabel = "13.0% LTCG";
+        } else {
+          cgTax = Number((taxableGain * this.GOLD_STCG_SLAB_RATE * (1.0 + this.CESS_RATE)).toFixed(2));
+          taxLabel = "31.2% Slab STCG";
+        }
+
+        const netPnl = Number((grossPnl - totalBrokerFees - cgTax).toFixed(2));
+        return {
+          name: "Gold: NSE Gold ETF (GOLDBEES)",
+          category: "GOLD",
+          details: `Buy ₹${buyPrice.toFixed(2)} -> ₹${sellPrice.toFixed(2)} (${taxLabel})`,
+          gross_pnl: grossPnl,
+          broker_and_stt: totalBrokerFees,
+          income_or_cg_tax: cgTax,
+          total_drag: Number((totalBrokerFees + cgTax).toFixed(2)),
+          net_pnl: netPnl,
+          net_roi_pct: Number(((netPnl / totalBudget) * 100.0).toFixed(2)),
+          meta: { buyPrice, sellPrice, qty, holdingDays, taxLabel }
+        };
+      }
+
+      static evaluatePhysicalDigitalGoldHold(startDateStr, endDateStr, totalBudget) {
+        const rows = NSEDataProvider.getHistoricalSlice("GOLD_24K_10G_INR", startDateStr, endDateStr, false);
+        if (!rows.length) throw new Error("No 24K Gold data for window");
+
+        const holdingDays = Math.max(1, Math.round((rows[rows.length - 1].ms - rows[0].ms) / 86400000));
+        const spotBuy10g = rows[0].close;
+        const spotSell10g = rows[rows.length - 1].close;
+
+        const purchaseExGst = totalBudget / (1.0 + this.BULLION_GST_BUY_RATE);
+        const gstOnBuy = totalBudget - purchaseExGst;
+
+        const buySpreadCost = purchaseExGst * this.BULLION_BUY_SPREAD;
+        const pureGoldSpotAcquired = purchaseExGst - buySpreadCost;
+        const units10g = pureGoldSpotAcquired / spotBuy10g;
+
+        const grossSpotSellValue = units10g * spotSell10g;
+        const sellSpreadCost = grossSpotSellValue * this.BULLION_SELL_SPREAD;
+        const netSaleProceeds = grossSpotSellValue - sellSpreadCost;
+
+        const grossSpotPnl = Number((grossSpotSellValue - pureGoldSpotAcquired).toFixed(2));
+        const totalGstAndSpreads = Number((gstOnBuy + buySpreadCost + sellSpreadCost).toFixed(2));
+
+        const taxableGain = Math.max(0.0, netSaleProceeds - purchaseExGst);
+        let cgTax, taxLabel;
+        if (holdingDays >= 730) {
+          cgTax = Number((taxableGain * this.GOLD_LTCG_RATE * (1.0 + this.CESS_RATE)).toFixed(2));
+          taxLabel = "13.0% LTCG";
+        } else {
+          cgTax = Number((taxableGain * this.GOLD_STCG_SLAB_RATE * (1.0 + this.CESS_RATE)).toFixed(2));
+          taxLabel = "31.2% Slab STCG";
+        }
+
+        const netPnl = Number((grossSpotPnl - totalGstAndSpreads - cgTax).toFixed(2));
+        return {
+          name: "Gold: Physical/Digital 24K Hold",
+          category: "GOLD",
+          details: `₹${Math.round(spotBuy10g).toLocaleString('en-IN')}->₹${Math.round(spotSell10g).toLocaleString('en-IN')}/10g (${taxLabel})`,
+          gross_pnl: grossSpotPnl,
+          broker_and_stt: totalGstAndSpreads,
+          income_or_cg_tax: cgTax,
+          total_drag: Number((totalGstAndSpreads + cgTax).toFixed(2)),
+          net_pnl: netPnl,
+          net_roi_pct: Number(((netPnl / totalBudget) * 100.0).toFixed(2)),
+          meta: { spotBuy10g, spotSell10g, gstOnBuy: Number(gstOnBuy.toFixed(2)), holdingDays, taxLabel }
+        };
+      }
+    }
+
+    class BankBenchmarkEngine {
+      static NATIONALIZED_BANKS = {
+        "SBI":            { savings: 2.70, "7_45d": 3.05, "46_179d": 4.50, "180_364d": 5.75, "1yr": 6.25, "over_1yr": 6.45 },
+        "PNB":            { savings: 2.70, "7_45d": 3.00, "46_179d": 4.25, "180_364d": 5.60, "1yr": 6.20, "over_1yr": 6.60 },
+        "Bank of Baroda": { savings: 2.75, "7_45d": 3.50, "46_179d": 4.25, "180_364d": 5.65, "1yr": 6.10, "over_1yr": 6.45 },
+        "Canara Bank":    { savings: 2.70, "7_45d": 3.00, "46_179d": 4.00, "180_364d": 5.25, "1yr": 6.25, "over_1yr": 6.45 }
+      };
+
+      static PRIVATE_INTL_BANKS = {
+        "HDFC Bank":          { savings: 3.00, "7_45d": 3.00, "46_179d": 4.25, "180_364d": 5.63, "1yr": 6.25, "over_1yr": 6.40 },
+        "ICICI Bank":         { savings: 3.00, "7_45d": 3.00, "46_179d": 4.25, "180_364d": 5.63, "1yr": 6.25, "over_1yr": 6.45 },
+        "Axis Bank":          { savings: 3.00, "7_45d": 3.00, "46_179d": 4.25, "180_364d": 5.63, "1yr": 6.25, "over_1yr": 6.45 },
+        "Standard Chartered": { savings: 2.75, "7_45d": 3.00, "46_179d": 4.50, "180_364d": 5.75, "1yr": 6.60, "over_1yr": 6.50 }
+      };
+
+      static INCOME_TAX_RATE = 0.30 * 1.04; // 31.2% effective slab tax
+
+      static getAverageSlabs(bankGroup) {
+        const keys = ["savings", "7_45d", "46_179d", "180_364d", "1yr", "over_1yr"];
+        const banks = Object.values(bankGroup);
+        const avg = {};
+        for (const k of keys) {
+          const sum = banks.reduce((acc, b) => acc + b[k], 0);
+          avg[k] = Number((sum / banks.length).toFixed(2));
+        }
+        return avg;
+      }
+
+      static calculateSavingsInterest(name, principal, annualRatePct, days) {
+        const years = days / 365.0;
+        const r = annualRatePct / 100.0;
+        const maturityVal = days >= 90
+          ? principal * Math.pow(1.0 + r / 4.0, 4.0 * years)
+          : principal * (1.0 + r * years);
+        const grossInterest = Number((maturityVal - principal).toFixed(2));
+        const numYears = Math.max(1.0, Math.ceil(years));
+        const taxableSav = Math.max(0.0, grossInterest - (10000.0 * numYears));
+        const incomeTax = Number((taxableSav * this.INCOME_TAX_RATE).toFixed(2));
+        const netInterest = Number((grossInterest - incomeTax).toFixed(2));
+
+        return {
+          name,
+          category: "BANK",
+          details: `${annualRatePct.toFixed(2)}% p.a. (Savings A/c)`,
+          gross_pnl: grossInterest,
+          broker_and_stt: 0.0,
+          income_or_cg_tax: incomeTax,
+          total_drag: incomeTax,
+          net_pnl: netInterest,
+          net_roi_pct: Number(((netInterest / principal) * 100.0).toFixed(2))
+        };
+      }
+
+      static calculateFdReturn(name, principal, slabs, days, minFdDays = 365) {
+        if (days < minFdDays || days < 7) {
+          return {
+            name,
+            category: "BANK",
+            details: `0.00% (< ${minFdDays}d Min FD Lock)`,
+            gross_pnl: 0.0,
+            broker_and_stt: 0.0,
+            income_or_cg_tax: 0.0,
+            total_drag: 0.0,
+            net_pnl: 0.0,
+            net_roi_pct: 0.0
+          };
+        }
+
+        let ratePct, slabLabel;
+        if (days <= 45) { ratePct = slabs["7_45d"]; slabLabel = "7-45d Slab"; }
+        else if (days <= 179) { ratePct = slabs["46_179d"]; slabLabel = "46-179d Slab"; }
+        else if (days <= 364) { ratePct = slabs["180_364d"]; slabLabel = "180-364d Slab"; }
+        else if (days <= 399) { ratePct = slabs["1yr"]; slabLabel = "1-Yr Slab"; }
+        else { ratePct = slabs["over_1yr"]; slabLabel = "400d+ Peak Slab"; }
+
+        const years = days / 365.0;
+        const r = ratePct / 100.0;
+        const maturityVal = days < 180
+          ? principal * (1.0 + r * years)
+          : principal * Math.pow(1.0 + r / 4.0, 4.0 * years);
+        const grossInterest = Number((maturityVal - principal).toFixed(2));
+        const incomeTax = Number((grossInterest * this.INCOME_TAX_RATE).toFixed(2));
+        const netInterest = Number((grossInterest - incomeTax).toFixed(2));
+
+        return {
+          name,
+          category: "BANK",
+          details: `${ratePct.toFixed(2)}% p.a. (${slabLabel})`,
+          gross_pnl: grossInterest,
+          broker_and_stt: 0.0,
+          income_or_cg_tax: incomeTax,
+          total_drag: incomeTax,
+          net_pnl: netInterest,
+          net_roi_pct: Number(((netInterest / principal) * 100.0).toFixed(2))
+        };
+      }
+    }
+
+    // =====================================================================
+    // SECTION 8: MASTER MULTI-ASSET COMPARISON RUNNER
+    // =====================================================================
+    const SESSION_PERIOD_REPORTS = [];
+    let ACTIVE_REPORT_INDEX = 0;
+
+    function toDdMmYyyy(isoDate) {
+      const parts = isoDate.split("-");
+      if (parts[0].length === 2) return isoDate;
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+
+    function formatInr(num, showSign = false) {
+      const sign = num > 0 && showSign ? "+" : num < 0 ? "-" : "";
+      const absVal = Math.abs(num);
+      return sign + absVal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function runComparisonForPeriod(startDateIso, endDateIso, totalBudget = 1000000.0, standardFdMinDays = 365, slippageBps = 5.0) {
+      const tStart = performance.now();
+      const startDate = toDdMmYyyy(startDateIso);
+      const endDate = toDdMmYyyy(endDateIso);
+
+      const startMs = NSEDataProvider.parseDateToMs(startDateIso);
+      const endMs = NSEDataProvider.parseDateToMs(endDateIso);
+      const durationDays = Math.max(1, Math.round((endMs - startMs) / 86400000));
+
+      const { dataset, symbols, elapsedSec, logLine } = NSEDataProvider.loadPointInTimeNifty50Data(startDate, endDate);
+
+      const algorithms = [
+        ["Algo: Equal-Weight Buy & Hold", strategyBuyAndHold],
+        ["Algo: Donchian (20/10) Breakout", strategyDonchianBreakout],
+        ["Algo: MACD (12,26,9) + 50-EMA", strategyMacdMomentum],
+        ["Algo: Bollinger Band (20,2)", strategyBollingerReversion],
+        ["Algo: SMA (10/30) Crossover", strategySmaCrossover],
+        ["Algo: RSI + Intraday Shorting", strategyRsiShortHybrid]
+      ];
+
+      const rows = [];
+      for (const [name, fn] of algorithms) {
+        rows.push(evaluateStrategyAcrossNifty50(name, fn, dataset, totalBudget, durationDays, slippageBps));
+      }
+
+      // Bitcoin (BTC-INR) Benchmark
+      rows.push(BitcoinIndiaBenchmark.evaluateBtcBuyAndHold(startDate, endDate, totalBudget));
+
+      // Gold Benchmarks (NSE Gold ETF & Physical/Digital 24K Gold)
+      rows.push(GoldIndiaBenchmark.evaluateGoldEtfBuyAndHold(startDate, endDate, totalBudget, slippageBps));
+      rows.push(GoldIndiaBenchmark.evaluatePhysicalDigitalGoldHold(startDate, endDate, totalBudget));
+
+      // Bank FD & Savings Benchmarks
+      const natSlabs = BankBenchmarkEngine.getAverageSlabs(BankBenchmarkEngine.NATIONALIZED_BANKS);
+      const pvtSlabs = BankBenchmarkEngine.getAverageSlabs(BankBenchmarkEngine.PRIVATE_INTL_BANKS);
+
+      rows.push(BankBenchmarkEngine.calculateFdReturn(
+        `Bank: Nationalized Std FD (>=${standardFdMinDays}d)`, totalBudget, natSlabs, durationDays, standardFdMinDays
+      ));
+      rows.push(BankBenchmarkEngine.calculateFdReturn(
+        `Bank: Private/Intl Std FD (>=${standardFdMinDays}d)`, totalBudget, pvtSlabs, durationDays, standardFdMinDays
+      ));
+
+      if (durationDays < standardFdMinDays) {
+        rows.push(BankBenchmarkEngine.calculateFdReturn(
+          "Bank: Nationalized Short-Term FD", totalBudget, natSlabs, durationDays, 7
+        ));
+        rows.push(BankBenchmarkEngine.calculateFdReturn(
+          "Bank: Private/Intl Short-Term FD", totalBudget, pvtSlabs, durationDays, 7
+        ));
+      }
+
+      rows.push(BankBenchmarkEngine.calculateSavingsInterest(
+        "Bank: Nationalized Savings A/c", totalBudget, natSlabs.savings, durationDays
+      ));
+      rows.push(BankBenchmarkEngine.calculateSavingsInterest(
+        "Bank: Private/Intl Savings A/c", totalBudget, pvtSlabs.savings, durationDays
+      ));
+
+      // Rank strictly by Post-Tax Net Profit
+      const ranked = rows.sort((a, b) => b.net_pnl - a.net_pnl);
+      const totalRunMs = (performance.now() - tStart).toFixed(1);
+
+      // Generate exact Python ASCII table string
+      const sepEq = "=".repeat(142);
+      const sepDash = "-".repeat(142);
+      let ascii = `${logLine}\n\n${sepEq}\n`;
+      ascii += `MULTI-ASSET BACKTEST (NIFTY 50 vs. GOLD vs. BITCOIN vs. BANK FD) | FROM ${startDate} TO ${endDate} (${durationDays} Days) | BUDGET: Rs.${formatInr(totalBudget)}\n`;
+      ascii += `${sepEq}\n`;
+      ascii += `${"Rank".padEnd(4)} | ${"Strategy / Asset Class".padEnd(34)} | ${"Execution / Rate Details".padEnd(36)} | ${"Gross P&L".padStart(13)} | ${"Fee/GST/STT".padStart(11)} | ${"CG/VDA/IT Tax".padStart(13)} | ${"Post-Tax Net".padStart(14)} | ${"Net ROI".padStart(7)}\n`;
+      ascii += `${sepDash}\n`;
+
+      ranked.forEach((r, idx) => {
+        const rk = `#${idx + 1}`.padEnd(4);
+        const nm = r.name.slice(0, 34).padEnd(34);
+        const dt = r.details.slice(0, 36).padEnd(36);
+        const gp = formatInr(r.gross_pnl).padStart(13);
+        const fe = formatInr(r.broker_and_stt).padStart(11);
+        const tx = formatInr(r.income_or_cg_tax).padStart(13);
+        const np = formatInr(r.net_pnl).padStart(14);
+        const roi = `${r.net_roi_pct.toFixed(2)}%`.padStart(7);
+        ascii += `${rk} | ${nm} | ${dt} | ${gp} | ${fe} | ${tx} | ${np} | ${roi}\n`;
+      });
+      ascii += `${sepEq}\n`;
+
+      const periodRecord = {
+        start_date: startDate,
+        end_date: endDate,
+        start_iso: startDateIso,
+        end_iso: endDateIso,
+        duration_days: durationDays,
+        total_budget: totalBudget,
+        slippage_bps: slippageBps,
+        pit_symbols: symbols,
+        ranked_rows: ranked,
+        ascii_log: ascii,
+        compute_ms: totalRunMs
+      };
+
+      SESSION_PERIOD_REPORTS.push(periodRecord);
+      ACTIVE_REPORT_INDEX = SESSION_PERIOD_REPORTS.length - 1;
+      return periodRecord;
+    }
+
+    // =====================================================================
+    // SECTION 9: CLIENT-SIDE LANDSCAPE A4 PDF GENERATOR (jsPDF)
+    // =====================================================================
+    class ClientPDFReportGenerator {
+      static cleanPdfText(text) {
+        return String(text).replace(/₹/g, "Rs.").replace(/—/g, "-").replace(/→/g, "->");
+      }
+
+      static generatePdf(periodReports) {
+        if (!window.jspdf || !window.jspdf.jsPDF) {
+          showToast("jsPDF library still loading, please retry in a moment.");
+          return;
+        }
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+        const pageW = 297;
+        const margin = 12;
+        const contentW = pageW - margin * 2; // 273 mm
+
+        periodReports.forEach((period, pIdx) => {
+          if (pIdx > 0) doc.addPage("a4", "landscape");
+
+          let y = margin;
+
+          // 1. Executive Dark Header Banner on Page 1 (or compact banner on subsequent pages)
+          doc.setFillColor(15, 23, 42); // #0F172A
+          doc.roundedRect(margin, y, contentW, 20, 2, 2, "F");
+
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(13);
+          doc.setTextColor(255, 255, 255);
+          doc.text("INDIAN MULTI-ASSET & ALGORITHMIC TRADING BACKTEST REPORT", margin + 4, y + 7.5);
+
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(8);
+          doc.setTextColor(203, 213, 225);
+          doc.text(
+            "Point-in-Time Nifty 50 Equities vs. Gold (NSE GOLDBEES ETF & 24K Bullion) vs. Bitcoin (BTC-INR) vs. Bank FDs",
+            margin + 4,
+            y + 14.5
+          );
+
+          const nowStr = new Date().toLocaleString("en-IN");
+          doc.setFont("helvetica", "bold");
+          doc.text(`Generated: ${nowStr}`, pageW - margin - 4, y + 7.5, { align: "right" });
+          doc.setFont("helvetica", "normal");
+          doc.text(`Broker: Groww + ${period.slippage_bps} bps Slippage | Finance Act 2024-26`, pageW - margin - 4, y + 14.5, { align: "right" });
+
+          y += 25;
+
+          // 2. Period Header Line
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(10.5);
+          doc.setTextColor(15, 23, 42);
+          doc.text(
+            `TEST WINDOW #${pIdx + 1}: FROM ${period.start_date} TO ${period.end_date} (${period.duration_days} Calendar Days) | STARTING BUDGET: Rs. ${formatInr(period.total_budget)}`,
+            margin,
+            y
+          );
+          y += 2;
+          doc.setDrawColor(203, 213, 225);
+          doc.setLineWidth(0.4);
+          doc.line(margin, y, pageW - margin, y);
+          y += 3.5;
+
+          // 3. 4 KPI Summary Cards
+          const ranked = period.ranked_rows;
+          const overallWinner = ranked[0];
+          const bestEq = ranked.find(r => r.name.startsWith("Algo:")) || overallWinner;
+          const bestGold = ranked.find(r => r.name.startsWith("Gold:")) || overallWinner;
+          const bestBank = ranked.find(r => r.name.startsWith("Bank:")) || overallWinner;
+
+          const kpiCards = [
+            { title: "OVERALL #1 WINNER", item: overallWinner },
+            { title: "BEST NIFTY-50 EQUITY ALGO", item: bestEq },
+            { title: "BEST GOLD INSTRUMENT", item: bestGold },
+            { title: "BEST BANK FD / SAVINGS", item: bestBank }
+          ];
+
+          const cardW = contentW / 4;
+          const cardH = 16;
+          kpiCards.forEach((c, idx) => {
+            const cx = margin + idx * cardW;
+            doc.setFillColor(241, 245, 249);
+            doc.setDrawColor(203, 213, 225);
+            doc.rect(cx, y, cardW, cardH, "FD");
+
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(6.8);
+            doc.setTextColor(100, 116, 139);
+            doc.text(c.title, cx + 3, y + 4.5);
+
+            doc.setFontSize(8.5);
+            doc.setTextColor(15, 23, 42);
+            doc.text(this.cleanPdfText(c.item.name).slice(0, 32), cx + 3, y + 9.5);
+
+            doc.setFontSize(7.5);
+            if (c.item.net_pnl >= 0) doc.setTextColor(21, 128, 61);
+            else doc.setTextColor(185, 28, 28);
+            const sign = c.item.net_pnl >= 0 ? "+" : "";
+            doc.text(
+              `Net: Rs. ${sign}${formatInr(c.item.net_pnl)} (${sign}${c.item.net_roi_pct.toFixed(2)}%)`,
+              cx + 3,
+              y + 14
+            );
+          });
+
+          y += cardH + 4;
+
+          // 4. Leaderboard Table
+          const colWidths = [12, 62, 66, 29, 25, 28, 31, 20]; // sum = 273mm
+          const headers = [
+            "Rank",
+            "Strategy / Asset Class",
+            "Execution / Rate Details",
+            "Gross P&L (Rs)",
+            "Fee/GST/STT",
+            "CG/VDA/IT Tax",
+            "Post-Tax Net",
+            "Net ROI"
+          ];
+
+          const rowH = 5.4;
+          doc.setFillColor(30, 41, 59);
+          doc.rect(margin, y, contentW, rowH + 0.8, "F");
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(7.5);
+          doc.setTextColor(255, 255, 255);
+
+          let curX = margin;
+          headers.forEach((h, i) => {
+            const align = i >= 3 ? "right" : i === 0 ? "center" : "left";
+            const tx = align === "right" ? curX + colWidths[i] - 2 : align === "center" ? curX + colWidths[i] / 2 : curX + 2;
+            doc.text(h, tx, y + 4, { align });
+            curX += colWidths[i];
+          });
+          y += rowH + 0.8;
+
+          ranked.forEach((r, idx) => {
+            if (idx === 0) doc.setFillColor(236, 253, 245); // Emerald tint for #1
+            else if (idx % 2 === 1) doc.setFillColor(248, 250, 252);
+            else doc.setFillColor(255, 255, 255);
+
+            doc.setDrawColor(203, 213, 225);
+            doc.rect(margin, y, contentW, rowH, "FD");
+
+            const sign = r.net_pnl >= 0 ? "+" : "";
+            const cells = [
+              `#${idx + 1}`,
+              this.cleanPdfText(r.name).slice(0, 35),
+              this.cleanPdfText(r.details).slice(0, 38),
+              formatInr(r.gross_pnl),
+              formatInr(r.broker_and_stt),
+              formatInr(r.income_or_cg_tax),
+              `${sign}${formatInr(r.net_pnl)}`,
+              `${sign}${r.net_roi_pct.toFixed(2)}%`
+            ];
+
+            let cx = margin;
+            cells.forEach((val, cIdx) => {
+              const isBold = idx === 0 || cIdx >= 6;
+              doc.setFont("helvetica", isBold ? "bold" : "normal");
+              doc.setFontSize(7.2);
+              if (cIdx >= 6) {
+                if (r.net_pnl >= 0) doc.setTextColor(21, 128, 61);
+                else doc.setTextColor(185, 28, 28);
+              } else {
+                doc.setTextColor(30, 41, 59);
+              }
+
+              const align = cIdx >= 3 ? "right" : cIdx === 0 ? "center" : "left";
+              const tx = align === "right" ? cx + colWidths[cIdx] - 2 : align === "center" ? cx + colWidths[cIdx] / 2 : cx + 2;
+              doc.text(val, tx, y + 3.8, { align });
+              cx += colWidths[cIdx];
+            });
+
+            y += rowH;
+          });
+
+          y += 3.5;
+
+          // 5. Vector Horizontal Post-Tax Net ROI (%) Bar Chart
+          const chartH = Math.min(54, ranked.length * 3.3 + 8);
+          doc.setFillColor(248, 250, 252);
+          doc.setDrawColor(203, 213, 225);
+          doc.roundedRect(margin, y, contentW, chartH, 1.5, 1.5, "FD");
+
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(7.5);
+          doc.setTextColor(15, 23, 42);
+          doc.text("POST-TAX NET ROI (%) VISUAL COMPARISON", margin + 3, y + 4.5);
+
+          const maxAbsRoi = Math.max(...ranked.map(r => Math.abs(r.net_roi_pct)), 10.0);
+          const zeroX = margin + 98;
+          const maxPosW = contentW - 122;
+          const maxNegW = 32;
+
+          doc.setDrawColor(100, 116, 139);
+          doc.setLineWidth(0.3);
+          doc.line(zeroX, y + 6, zeroX, y + chartH - 2);
+
+          const barStep = (chartH - 8) / ranked.length;
+          ranked.forEach((r, idx) => {
+            const by = y + 6.5 + idx * barStep;
+            const roi = r.net_roi_pct;
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(6.2);
+            doc.setTextColor(30, 41, 59);
+            doc.text(`#${idx + 1} ${this.cleanPdfText(r.name).slice(0, 28)}`, margin + 2.5, by + 2.2);
+
+            if (roi >= 0) {
+              const bw = Math.max(0.8, (roi / maxAbsRoi) * maxPosW);
+              doc.setFillColor(idx === 0 ? 5 : 22, idx === 0 ? 150 : 163, idx === 0 ? 105 : 74);
+              doc.rect(zeroX, by, bw, Math.max(1.8, barStep - 0.9), "F");
+              doc.setFont("helvetica", "bold");
+              doc.setTextColor(21, 128, 61);
+              doc.text(`+${roi.toFixed(2)}%`, zeroX + bw + 1.5, by + 2.2);
+            } else {
+              const bw = Math.max(0.8, (Math.abs(roi) / maxAbsRoi) * maxNegW);
+              doc.setFillColor(220, 38, 38);
+              doc.rect(zeroX - bw, by, bw, Math.max(1.8, barStep - 0.9), "F");
+              doc.setFont("helvetica", "bold");
+              doc.setTextColor(185, 28, 28);
+              doc.text(`${roi.toFixed(2)}%`, zeroX - bw - 1.5, by + 2.2, { align: "right" });
+            }
+          });
+
+          // Footer regulatory note
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(6.3);
+          doc.setTextColor(71, 85, 105);
+          doc.text(
+            "Methodology: (1) Nifty-50 Point-in-Time Equities: Groww brokerage (Rs.20 cap), 0.1% STT, DP charges, 5 bps slippage, 20.8% STCG / 13.0% LTCG (>Rs.1.25L). (2) Gold: GOLDBEES 0% STT (>365d 13% LTCG); Physical 24K 3% Buy GST + 1.5% spread (>=730d 13% LTCG). (3) BTC-INR: 31.2% Sec 115BBH VDA Tax + 1% TDS. (4) Bank FD/Savings: 31.2% slab tax.",
+            margin,
+            203
+          );
+        });
+
+        doc.save("Multi_Asset_Backtest_Report.pdf");
+        showToast(`Saved Landscape A4 PDF (${periodReports.length} window${periodReports.length > 1 ? "s" : ""}) to Multi_Asset_Backtest_Report.pdf`);
+      }
+    }
+
+    // =====================================================================
+    // SECTION 10: UI RENDERERS & INTERACTIVE DRILL-DOWN
+    // =====================================================================
+    function showToast(msg) {
+      const banner = document.getElementById("toastBanner");
+      document.getElementById("toastMessage").textContent = msg;
+      banner.classList.remove("hidden");
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => banner.classList.add("hidden"), 4000);
+    }
+
+    function getCategoryBadge(cat) {
+      if (cat === "EQUITY_ALGO") {
+        return `<span class="px-1.5 py-0.5 text-[10px] rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">Nifty-50</span>`;
+      }
+      if (cat === "GOLD") {
+        return `<span class="px-1.5 py-0.5 text-[10px] rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">Gold</span>`;
+      }
+      if (cat === "CRYPTO") {
+        return `<span class="px-1.5 py-0.5 text-[10px] rounded bg-orange-500/15 text-orange-300 border border-orange-500/30">VDA Crypto</span>`;
+      }
+      return `<span class="px-1.5 py-0.5 text-[10px] rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">Bank</span>`;
+    }
+
+    function renderActivePeriodReport() {
+      const period = SESSION_PERIOD_REPORTS[ACTIVE_REPORT_INDEX];
+      if (!period) return;
+
+      // Update Header & Session Tabs
+      document.getElementById("lblActiveWindowBadge").textContent = `WINDOW #${ACTIVE_REPORT_INDEX + 1}`;
+      document.getElementById("lblActiveWindowTitle").textContent =
+        `FROM ${period.start_date} TO ${period.end_date} (${period.duration_days.toLocaleString()} Calendar Days) | BUDGET: ₹${formatInr(period.total_budget)}`;
+      document.getElementById("lblExecutionSpeed").innerHTML =
+        `<i class="fa-solid fa-microchip text-emerald-400 mr-1"></i>Computed 50-Stock PIT + Benchmarks in <strong class="text-white">${period.compute_ms} ms</strong>`;
+      document.getElementById("badgePitVintage").textContent = `${PointInTimeNifty50.getYearFromDateStr(period.start_date)} Cohort (50)`;
+
+      // Render Session Tabs
+      const tabsContainer = document.getElementById("sessionTabsContainer");
+      document.getElementById("lblSessionCount").textContent = SESSION_PERIOD_REPORTS.length;
+      tabsContainer.innerHTML = SESSION_PERIOD_REPORTS.map((rep, idx) => {
+        const active = idx === ACTIVE_REPORT_INDEX;
+        return `<button onclick="switchSessionTab(${idx})" class="px-2.5 py-1 rounded text-xs font-mono transition ${
+          active
+            ? "bg-emerald-600 text-white font-bold shadow"
+            : "bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+        }">#${idx + 1}: ${rep.start_date.slice(6)}→${rep.end_date.slice(6)} (${rep.duration_days}d)</button>`;
+      }).join("");
+
+      const ranked = period.ranked_rows;
+
+      // 1. Render 4 KPI Highlight Cards
+      const overallWinner = ranked[0];
+      const bestEq = ranked.find(r => r.name.startsWith("Algo:")) || overallWinner;
+      const bestGold = ranked.find(r => r.name.startsWith("Gold:")) || overallWinner;
+      const bestBank = ranked.find(r => r.name.startsWith("Bank:")) || overallWinner;
+
+      const kpiConfigs = [
+        { label: "OVERALL #1 WINNER", icon: "fa-trophy text-amber-400", item: overallWinner, border: "border-emerald-500/40" },
+        { label: "BEST NIFTY-50 EQUITY ALGO", icon: "fa-chart-line text-emerald-400", item: bestEq, border: "border-slate-800" },
+        { label: "BEST GOLD INSTRUMENT", icon: "fa-coins text-yellow-400", item: bestGold, border: "border-slate-800" },
+        { label: "BEST BANK FD / SAVINGS", icon: "fa-building-columns text-cyan-400", item: bestBank, border: "border-slate-800" }
+      ];
+
+      document.getElementById("kpiCardsGrid").innerHTML = kpiConfigs.map(k => {
+        const isPos = k.item.net_pnl >= 0;
+        const pnlColor = isPos ? "text-emerald-400" : "text-rose-400";
+        return `
+          <div class="glass-card rounded-2xl p-4 border ${k.border} shadow-lg flex flex-col justify-between">
+            <div class="flex items-center justify-between text-[11px] font-mono uppercase tracking-wider text-slate-400">
+              <span>${k.label}</span>
+              <i class="fa-solid ${k.icon} text-sm"></i>
+            </div>
+            <div class="my-2">
+              <div class="text-sm sm:text-base font-bold text-white truncate" title="${k.item.name}">${k.item.name}</div>
+              <div class="text-[11px] font-mono text-slate-400 truncate mt-0.5">${k.item.details}</div>
+            </div>
+            <div class="pt-2 border-t border-slate-800/80 flex items-baseline justify-between font-mono">
+              <span class="text-xs sm:text-sm font-extrabold ${pnlColor}">₹${formatInr(k.item.net_pnl, true)}</span>
+              <span class="px-2 py-0.5 rounded text-xs font-bold ${isPos ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'}">
+                ${k.item.net_roi_pct >= 0 ? '+' : ''}${k.item.net_roi_pct.toFixed(2)}%
+              </span>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      // 2. Render Leaderboard Table
+      const tbody = document.getElementById("leaderboardTableBody");
+      tbody.innerHTML = ranked.map((r, idx) => {
+        const isPos = r.net_pnl >= 0;
+        const rowClass = idx === 0 ? "rank-1-glow hover:bg-emerald-950/30" : "hover:bg-slate-800/60";
+        const pnlColor = isPos ? "text-emerald-400 font-bold" : "text-rose-400 font-bold";
+
+        return `
+          <tr onclick="openStrategyModal(${idx})" class="${rowClass} cursor-pointer transition group">
+            <td class="py-3 pl-4 pr-2 text-center font-bold ${idx === 0 ? 'text-emerald-400' : 'text-slate-400'}">
+              #${idx + 1}
+            </td>
+            <td class="py-3 px-2.5">
+              <div class="flex items-center gap-2">
+                ${getCategoryBadge(r.category)}
+                <span class="font-sans font-semibold text-slate-100 group-hover:text-emerald-300 transition">${r.name}</span>
+              </div>
+              <div class="text-[10px] text-slate-400 md:hidden mt-0.5">${r.details}</div>
+            </td>
+            <td class="py-3 px-2.5 text-slate-300 hidden md:table-cell">${r.details}</td>
+            <td class="py-3 px-2.5 text-right text-slate-200">${formatInr(r.gross_pnl)}</td>
+            <td class="py-3 px-2.5 text-right text-amber-300/90 hidden sm:table-cell">${formatInr(r.broker_and_stt)}</td>
+            <td class="py-3 px-2.5 text-right text-orange-300/90 hidden sm:table-cell">${formatInr(r.income_or_cg_tax)}</td>
+            <td class="py-3 px-2.5 text-right ${pnlColor}">${formatInr(r.net_pnl, true)}</td>
+            <td class="py-3 pl-2 pr-4 text-right ${pnlColor}">
+              ${r.net_roi_pct >= 0 ? '+' : ''}${r.net_roi_pct.toFixed(2)}%
+            </td>
+          </tr>
+        `;
+      }).join("");
+
+      // 3. Render SVG Vector Horizontal ROI (%) Bar Chart (Matches ReportLab _build_roi_bar_chart)
+      renderVectorRoiChart(ranked);
+
+      // 4. Render Tax & Fee Drag Analyzer
+      renderTaxDragAnalyzer(ranked);
+
+      // 5. Update Terminal Console Output
+      document.getElementById("asciiConsoleOutput").textContent = period.ascii_log;
+    }
+
+    function renderVectorRoiChart(ranked) {
+      const container = document.getElementById("roiVectorChartContainer");
+      const rowH = 26;
+      const svgW = 580;
+      const svgH = ranked.length * rowH + 28;
+      const maxAbsRoi = Math.max(...ranked.map(r => Math.abs(r.net_roi_pct)), 10.0);
+
+      const zeroX = 245;
+      const maxPosBarW = svgW - zeroX - 75;
+      const maxNegBarW = 65;
+
+      let svg = `<svg viewBox="0 0 ${svgW} ${svgH}" class="w-full h-auto select-none font-mono">`;
+      // Vertical Zero Axis Line
+      svg += `<line x1="${zeroX}" y1="8" x2="${zeroX}" y2="${svgH - 10}" stroke="#475569" stroke-width="1.5" stroke-dasharray="3,3" />`;
+
+      ranked.forEach((r, idx) => {
+        const y = 12 + idx * rowH;
+        const roi = r.net_roi_pct;
+        const shortName = r.name.length > 29 ? r.name.slice(0, 29) + "…" : r.name;
+
+        // Label on Left
+        svg += `<text x="6" y="${y + 14}" fill="${idx === 0 ? '#34d399' : '#cbd5e1'}" font-size="10.5" font-weight="${idx === 0 ? '700' : '500'}">#${idx + 1} ${shortName}</text>`;
+
+        if (roi >= 0) {
+          const barW = Math.max(2, (roi / maxAbsRoi) * maxPosBarW);
+          const fill = idx === 0 ? "#10b981" : "#16a34a";
+          svg += `<rect x="${zeroX}" y="${y + 3}" width="${barW}" height="${rowH - 8}" rx="3" fill="${fill}" />`;
+          svg += `<text x="${zeroX + barW + 6}" y="${y + 14}" fill="#4ade80" font-size="10.5" font-weight="700">+${roi.toFixed(2)}%</text>`;
+        } else {
+          const barW = Math.max(2, (Math.abs(roi) / maxAbsRoi) * maxNegBarW);
+          svg += `<rect x="${zeroX - barW}" y="${y + 3}" width="${barW}" height="${rowH - 8}" rx="3" fill="#dc2626" />`;
+          svg += `<text x="${zeroX - barW - 6}" y="${y + 14}" fill="#f87171" font-size="10.5" font-weight="700" text-anchor="end">${roi.toFixed(2)}%</text>`;
+        }
+      });
+
+      svg += `</svg>`;
+      container.innerHTML = svg;
+    }
+
+    function renderTaxDragAnalyzer(ranked) {
+      const container = document.getElementById("taxDragContainer");
+      const profitable = ranked.filter(r => r.gross_pnl > 0);
+      if (!profitable.length) {
+        container.innerHTML = `<div class="text-xs text-slate-500 font-mono">No positive gross P&L strategies in this window.</div>`;
+        return;
+      }
+
+      container.innerHTML = profitable.map(r => {
+        const feePct = Math.min(100, Math.max(0, (r.broker_and_stt / r.gross_pnl) * 100));
+        const taxPct = Math.min(100 - feePct, Math.max(0, (r.income_or_cg_tax / r.gross_pnl) * 100));
+        const netRetainedPct = Math.max(0, 100 - feePct - taxPct);
+
+        return `
+          <div class="bg-slate-900/70 p-2.5 rounded-xl border border-slate-800/80 text-xs">
+            <div class="flex items-center justify-between mb-1">
+              <span class="font-semibold text-slate-200 truncate">${r.name}</span>
+              <span class="font-mono text-[11px] text-slate-400">
+                Retains <strong class="text-emerald-400">${netRetainedPct.toFixed(1)}%</strong> of Gross
+              </span>
+            </div>
+            <div class="w-full h-2.5 rounded-full bg-slate-800 overflow-hidden flex">
+              <div style="width: ${netRetainedPct}%" class="bg-emerald-500" title="Post-Tax Net Retained: ${netRetainedPct.toFixed(1)}%"></div>
+              <div style="width: ${feePct}%" class="bg-amber-400" title="Brokerage / STT / GST / Spread: ${feePct.toFixed(1)}%"></div>
+              <div style="width: ${taxPct}%" class="bg-rose-500" title="CG / VDA / Slab Tax: ${taxPct.toFixed(1)}%"></div>
+            </div>
+            <div class="flex items-center justify-between text-[10px] font-mono text-slate-400 mt-1">
+              <span><span class="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1"></span>Net: ₹${formatInr(r.net_pnl)}</span>
+              <span><span class="inline-block w-2 h-2 rounded-full bg-amber-400 mr-1"></span>Fee/STT/GST: ${feePct.toFixed(1)}%</span>
+              <span><span class="inline-block w-2 h-2 rounded-full bg-rose-500 mr-1"></span>Tax: ${taxPct.toFixed(1)}%</span>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    // =====================================================================
+    // SECTION 11: STRATEGY DRILL-DOWN MODAL (50 STOCKS & WATERFALL)
+    // =====================================================================
+    window.openStrategyModal = function (rankIndex) {
+      const period = SESSION_PERIOD_REPORTS[ACTIVE_REPORT_INDEX];
+      if (!period) return;
+      const row = period.ranked_rows[rankIndex];
+      if (!row) return;
+
+      document.getElementById("mdlStratRank").textContent = `#${rankIndex + 1}`;
+      document.getElementById("mdlStratName").textContent = row.name;
+      document.getElementById("mdlStratSub").textContent =
+        `Window: ${period.start_date} to ${period.end_date} (${period.duration_days} Days) | Execution: ${row.details}`;
+
+      const body = document.getElementById("mdlStratBody");
+
+      // Waterfall Cards
+      let html = `
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono">
+          <div class="p-3.5 rounded-xl bg-slate-950 border border-slate-800">
+            <div class="text-[10px] uppercase text-slate-400">Gross Realized P&amp;L</div>
+            <div class="text-sm sm:text-base font-bold text-white mt-1">₹${formatInr(row.gross_pnl, true)}</div>
+          </div>
+          <div class="p-3.5 rounded-xl bg-slate-950 border border-slate-800">
+            <div class="text-[10px] uppercase text-slate-400">Brokerage / STT / GST / Spread</div>
+            <div class="text-sm sm:text-base font-bold text-amber-400 mt-1">-₹${formatInr(row.broker_and_stt)}</div>
+          </div>
+          <div class="p-3.5 rounded-xl bg-slate-950 border border-slate-800">
+            <div class="text-[10px] uppercase text-slate-400">STCG / LTCG / VDA / IT Tax</div>
+            <div class="text-sm sm:text-base font-bold text-rose-400 mt-1">-₹${formatInr(row.income_or_cg_tax)}</div>
+          </div>
+          <div class="p-3.5 rounded-xl bg-slate-950 border border-emerald-500/40">
+            <div class="text-[10px] uppercase text-emerald-300">Post-Tax Net Profit (ROI)</div>
+            <div class="text-sm sm:text-base font-extrabold ${row.net_pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'} mt-1">
+              ₹${formatInr(row.net_pnl, true)} (${row.net_roi_pct >= 0 ? '+' : ''}${row.net_roi_pct.toFixed(2)}%)
+            </div>
+          </div>
+        </div>
+      `;
+
+      if (row.category === "EQUITY_ALGO" && row.meta) {
+        const m = row.meta;
+        html += `
+          <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-xs font-mono bg-slate-950/70 p-3.5 rounded-xl border border-slate-800">
+            <div><span class="text-slate-400 block text-[10px]">STCG Tax (20.8%)</span><span class="text-slate-200 font-semibold">₹${formatInr(m.stcgTax)}</span></div>
+            <div><span class="text-slate-400 block text-[10px]">LTCG Tax (13.0% &gt;1.25L)</span><span class="text-slate-200 font-semibold">₹${formatInr(m.ltcgTax)}</span></div>
+            <div><span class="text-slate-400 block text-[10px]">Intraday Spec Tax (31.2%)</span><span class="text-slate-200 font-semibold">₹${formatInr(m.specTax)}</span></div>
+            <div><span class="text-slate-400 block text-[10px]">Idle Cash Sweep (2.75%)</span><span class="text-emerald-300 font-semibold">+₹${formatInr(m.idleInterestGross)}</span></div>
+            <div><span class="text-slate-400 block text-[10px]">Win Rate / Exits</span><span class="text-cyan-300 font-semibold">${m.winRate}% (${m.exitCount} exits)</span></div>
+          </div>
+
+          <div>
+            <h4 class="text-xs font-mono uppercase tracking-wider text-slate-300 font-bold mb-2">
+              Point-in-Time Nifty 50 Stock-by-Stock Performance Breakdown (50 Constituents)
+            </h4>
+            <div class="max-h-72 overflow-y-auto rounded-xl border border-slate-800">
+              <table class="w-full text-left border-collapse text-xs font-mono">
+                <thead class="bg-slate-950 sticky top-0 text-[10px] uppercase text-slate-400 border-b border-slate-800">
+                  <tr>
+                    <th class="py-2 px-3">Symbol</th>
+                    <th class="py-2 px-3 text-right">Closed Trades</th>
+                    <th class="py-2 px-3 text-right">Win Rate</th>
+                    <th class="py-2 px-3 text-right">Gross P&amp;L (₹)</th>
+                    <th class="py-2 px-3 text-right">Groww Fees + STT (₹)</th>
+                    <th class="py-2 px-3 text-right">Net Pre-Tax P&amp;L (₹)</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/60 bg-slate-900/60">
+                  ${m.stockBreakdown.map(st => {
+                    const wr = st.trades > 0 ? ((st.wins / st.trades) * 100).toFixed(0) : "0";
+                    return `
+                      <tr class="hover:bg-slate-800/50">
+                        <td class="py-1.5 px-3 font-bold text-white">${st.sym}</td>
+                        <td class="py-1.5 px-3 text-right text-slate-300">${st.trades}</td>
+                        <td class="py-1.5 px-3 text-right text-slate-300">${wr}%</td>
+                        <td class="py-1.5 px-3 text-right text-slate-200">${formatInr(st.grossPnl, true)}</td>
+                        <td class="py-1.5 px-3 text-right text-amber-300">${formatInr(st.fees)}</td>
+                        <td class="py-1.5 px-3 text-right font-bold ${st.netPnlBeforeTax >= 0 ? 'text-emerald-400' : 'text-rose-400'}">
+                          ${formatInr(st.netPnlBeforeTax, true)}
+                        </td>
+                      </tr>
+                    `;
+                  }).join("")}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      } else {
+        html += `
+          <div class="p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 space-y-1.5 font-mono">
+            <div class="font-bold text-white">Benchmark Tax &amp; Fee Computation Details:</div>
+            <div>• Instrument: ${row.name}</div>
+            <div>• Execution / Slab Summary: ${row.details}</div>
+            <div>• Statutory Tax Deducted: ₹${formatInr(row.income_or_cg_tax)}</div>
+            <div>• Exchange / GST / Bullion Spread Drag: ₹${formatInr(row.broker_and_stt)}</div>
+          </div>
+        `;
+      }
+
+      body.innerHTML = html;
+      document.getElementById("modalStrategyDetail").classList.remove("hidden");
+    };
+
+    window.switchSessionTab = function (idx) {
+      if (idx >= 0 && idx < SESSION_PERIOD_REPORTS.length) {
+        ACTIVE_REPORT_INDEX = idx;
+        renderActivePeriodReport();
+      }
+    };
+
+    // =====================================================================
+    // SECTION 12: INITIALIZATION & EVENT LISTENERS
+    // =====================================================================
+    function renderPitModalBadges(year) {
+      const dateStr = `01-01-${year}`;
+      const symbols = PointInTimeNifty50.getConstituentsAsOf(dateStr);
+      const coreSet = new Set(PointInTimeNifty50.CORE_34);
+      document.getElementById("mdlPitStartDate").textContent = `Year ${year} (${symbols.length} Constituents)`;
+
+      document.getElementById("mdlPitBadgesGrid").innerHTML = symbols.map((sym, idx) => {
+        const isCore = coreSet.has(sym);
+        return `
+          <div class="px-3 py-2 rounded-xl border ${
+            isCore ? "bg-slate-950 border-slate-800 text-slate-200" : "bg-purple-950/30 border-purple-500/40 text-purple-200"
+          } flex items-center justify-between font-mono text-xs">
+            <span class="font-bold">${idx + 1}. ${sym}</span>
+            <span class="text-[9px] px-1.5 py-0.5 rounded ${isCore ? "bg-slate-800 text-slate-400" : "bg-purple-500/20 text-purple-300"}">
+              ${isCore ? "CORE" : "PIT " + year}
+            </span>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function populateCsvExportDropdown() {
+      const sel = document.getElementById("selExportSymbol");
+      const allSyms = ["BTC_INR_CRYPTO", "GOLDBEES_ETF", "GOLD_24K_10G_INR", ...PointInTimeNifty50.getAllUniqueSymbols()];
+      sel.innerHTML = allSyms.map(s => `<option value="${s}">${s}.csv</option>`).join("");
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      populateCsvExportDropdown();
+
+      // Run initial 3-Window Suite matching Python's `if __name__ == "__main__":`
+      runComparisonForPeriod("2016-10-26", "2026-10-26", 1000000.0, 365, 5.0);
+      runComparisonForPeriod("2023-10-26", "2026-10-26", 1000000.0, 365, 5.0);
+      runComparisonForPeriod("2025-10-26", "2026-10-26", 1000000.0, 365, 5.0);
+      ACTIVE_REPORT_INDEX = 0; // Show 10-Year comprehensive window first
+      renderActivePeriodReport();
+
+      // Run Single Window Button
+      document.getElementById("btnRunSingle").addEventListener("click", () => {
+        const s = document.getElementById("inpStartDate").value;
+        const e = document.getElementById("inpEndDate").value;
+        const budget = parseFloat(document.getElementById("inpBudget").value) || 1000000.0;
+        const minFd = parseInt(document.getElementById("inpMinFdDays").value, 10) || 365;
+        const slip = parseFloat(document.getElementById("inpSlippageBps").value) || 0;
+
+        if (new Date(s) >= new Date(e)) {
+          showToast("Start Date must be earlier than End Date.");
+          return;
+        }
+        runComparisonForPeriod(s, e, budget, minFd, slip);
+        renderActivePeriodReport();
+        showToast(`Completed backtest for ${toDdMmYyyy(s)} → ${toDdMmYyyy(e)}`);
+      });
+
+      // Run 3-Window Suite Button
+      document.getElementById("btnRunSuite").addEventListener("click", () => {
+        const budget = parseFloat(document.getElementById("inpBudget").value) || 1000000.0;
+        const minFd = parseInt(document.getElementById("inpMinFdDays").value, 10) || 365;
+        const slip = parseFloat(document.getElementById("inpSlippageBps").value) || 0;
+
+        SESSION_PERIOD_REPORTS.length = 0;
+        runComparisonForPeriod("2016-10-26", "2026-10-26", budget, minFd, slip);
+        runComparisonForPeriod("2023-10-26", "2026-10-26", budget, minFd, slip);
+        runComparisonForPeriod("2025-10-26", "2026-10-26", budget, minFd, slip);
+        ACTIVE_REPORT_INDEX = 0;
+        renderActivePeriodReport();
+        showToast("Executed 3-Window Suite (10Y, 3Y, 1Y) & queued for PDF export.");
+      });
+
+      // Quick Presets
+      document.querySelectorAll(".preset-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const s = btn.getAttribute("data-start");
+          const e = btn.getAttribute("data-end");
+          document.getElementById("inpStartDate").value = s;
+          document.getElementById("inpEndDate").value = e;
+          document.getElementById("btnRunSingle").click();
+        });
+      });
+
+      // Clear Session Windows
+      document.getElementById("btnClearSession").addEventListener("click", () => {
+        if (SESSION_PERIOD_REPORTS.length > 1) {
+          const current = SESSION_PERIOD_REPORTS[ACTIVE_REPORT_INDEX];
+          SESSION_PERIOD_REPORTS.length = 0;
+          SESSION_PERIOD_REPORTS.push(current);
+          ACTIVE_REPORT_INDEX = 0;
+          renderActivePeriodReport();
+          showToast("Cleared previous session windows; retained active window.");
+        }
+      });
+
+      // Export Landscape PDF
+      document.getElementById("btnExportPdf").addEventListener("click", () => {
+        ClientPDFReportGenerator.generatePdf(SESSION_PERIOD_REPORTS);
+      });
+
+      // Copy ASCII Table
+      document.getElementById("btnCopyAscii").addEventListener("click", () => {
+        const text = document.getElementById("asciiConsoleOutput").textContent;
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        showToast("Copied formatted ASCII leaderboard table to clipboard!");
+      });
+
+      // Modals Open/Close
+      document.getElementById("btnCloseStratModal").addEventListener("click", () => {
+        document.getElementById("modalStrategyDetail").classList.add("hidden");
+      });
+
+      document.getElementById("btnOpenPitModal").addEventListener("click", () => {
+        const s = document.getElementById("inpStartDate").value;
+        renderPitModalBadges(PointInTimeNifty50.getYearFromDateStr(s));
+        document.getElementById("modalPitUniverse").classList.remove("hidden");
+      });
+      document.getElementById("btnClosePitModal").addEventListener("click", () => {
+        document.getElementById("modalPitUniverse").classList.add("hidden");
+      });
+      document.querySelectorAll(".pit-year-btn").forEach(btn => {
+        btn.addEventListener("click", () => renderPitModalBadges(parseInt(btn.getAttribute("data-year"), 10)));
+      });
+
+      document.getElementById("btnOpenDataModal").addEventListener("click", () => {
+        document.getElementById("modalDataCache").classList.remove("hidden");
+      });
+      document.getElementById("btnCloseDataModal").addEventListener("click", () => {
+        document.getElementById("modalDataCache").classList.add("hidden");
+      });
+
+      // Local CSV File Upload / Dropzone
+      const fileInput = document.getElementById("inpCsvFiles");
+      fileInput.addEventListener("change", async (ev) => {
+        const files = Array.from(ev.target.files || []);
+        if (!files.length) return;
+        let loaded = [];
+        for (const f of files) {
+          const txt = await f.text();
+          const res = NSEDataProvider.ingestCsvText(f.name, txt);
+          if (res) loaded.push(`${res.symbol} (${res.rows} rows)`);
+        }
+        const statusEl = document.getElementById("csvUploadStatus");
+        statusEl.classList.remove("hidden");
+        statusEl.textContent = `Loaded ${loaded.length} CSV file(s) into client memory: ${loaded.join(", ")}`;
+        document.getElementById("badgeCacheCount").textContent = `${NSEDataProvider.customCsvLoaded.size} CSVs`;
+        showToast(`Ingested ${loaded.length} custom CSV file(s). Re-running window...`);
+        document.getElementById("btnRunSingle").click();
+      });
+
+      // Download Cached CSV
+      document.getElementById("btnDownloadCsv").addEventListener("click", () => {
+        const sym = document.getElementById("selExportSymbol").value;
+        NSEDataProvider.ensureSymbolInitialized(sym);
+        const rows = NSEDataProvider.memoryCache[sym] || [];
+        let csv = "date,open,high,low,close\n";
+        rows.forEach(r => {
+          csv += `${r.date_str},${r.open},${r.high},${r.low},${r.close}\n`;
+        });
+        const blob = new Blob([csv], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${sym}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast(`Downloaded ${sym}.csv (${rows.length} trading days)`);
+      });
+
+      // Optional Live Yahoo Finance Benchmark Sync via CORS Proxy
+      document.getElementById("btnSyncYahoo").addEventListener("click", async () => {
+        const btn = document.getElementById("btnSyncYahoo");
+        const origHtml = btn.innerHTML;
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Syncing via CORS Proxy...</span>`;
+        btn.disabled = true;
+        try {
+          const url = "https://query1.finance.yahoo.com/v8/finance/chart/GOLDBEES.NS?interval=1d&range=10y";
+          const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+          const resp = await fetch(proxyUrl);
+          if (!resp.ok) throw new Error("Proxy unreachable");
+          const data = await resp.json();
+          const parsed = JSON.parse(data.contents);
+          const result = parsed.chart.result[0];
+          const timestamps = result.timestamp;
+          const quote = result.indicators.quote[0];
+          const newRows = [];
+          for (let i = 0; i < timestamps.length; i++) {
+            if (quote.close[i] == null) continue;
+            const dt = new Date(timestamps[i] * 1000);
+            const c = Number(quote.close[i].toFixed(2));
+            newRows.push({
+              date: dt,
+              date_str: dt.toISOString().slice(0, 10),
+              ms: dt.getTime(),
+              open: c,
+              high: c,
+              low: c,
+              close: c
+            });
+          }
+          if (newRows.length > 100) {
+            NSEDataProvider.memoryCache["GOLDBEES_ETF"] = newRows;
+            NSEDataProvider.customCsvLoaded.add("GOLDBEES_ETF (Live YF)");
+            showToast(`Synced ${newRows.length} live GOLDBEES.NS candles from Yahoo Finance!`);
+            document.getElementById("btnRunSingle").click();
+          }
+        } catch (err) {
+          showToast("Live CORS proxy rate-limited; using built-in calibrated NSE dataset.");
+        } finally {
+          btn.innerHTML = origHtml;
+          btn.disabled = false;
+        }
+      });
+    });
+  </script>
+</body>
+</html>

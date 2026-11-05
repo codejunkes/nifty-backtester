@@ -177,16 +177,25 @@
             class="w-full px-2.5 py-2 rounded-lg bg-slate-900 border border-slate-700 text-sm font-mono text-white focus:outline-none focus:border-emerald-500 transition" />
         </div>
 
+        <!-- Daily Trade Limit -->
+        <div class="lg:col-span-1">
+          <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5" title="Maximum executed orders allowed per day across the portfolio (enforces realistic daily transaction limits)">
+            Daily Limit
+          </label>
+          <input type="number" id="inpDailyTradeLimit" value="15" step="1" min="1" max="100"
+            class="w-full px-2.5 py-2 rounded-lg bg-slate-900 border border-slate-700 text-sm font-mono text-white focus:outline-none focus:border-emerald-500 transition" />
+        </div>
+
         <!-- Execution Buttons -->
-        <div class="sm:col-span-2 lg:col-span-4 flex flex-wrap sm:flex-nowrap gap-2">
-          <button id="btnRunSingle" class="flex-1 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-950/60 transition flex items-center justify-center gap-2">
+        <div class="sm:col-span-2 lg:col-span-3 flex flex-wrap sm:flex-nowrap gap-2">
+          <button id="btnRunSingle" class="flex-1 px-3.5 py-2.5 rounded-xl font-semibold text-xs sm:text-sm bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-950/60 transition flex items-center justify-center gap-1.5">
             <i class="fa-solid fa-bolt"></i>
             <span>Run Window</span>
           </button>
 
-          <button id="btnRunSuite" class="flex-1 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-950/60 transition flex items-center justify-center gap-2" title="Runs the 3 canonical windows from __main__ (10Y: 2016-2026, 3Y: 2023-2026, 1Y: 2025-2026)">
+          <button id="btnRunSuite" class="flex-1 px-3.5 py-2.5 rounded-xl font-semibold text-xs sm:text-sm bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-950/60 transition flex items-center justify-center gap-1.5" title="Runs the 3 canonical windows from __main__ (10Y: 2016-2026, 3Y: 2023-2026, 1Y: 2025-2026)">
             <i class="fa-solid fa-layer-group"></i>
-            <span>Run 3-Window Suite (10Y / 3Y / 1Y)</span>
+            <span>Run 3-Window Suite</span>
           </button>
         </div>
       </div>
@@ -617,10 +626,15 @@
     // SECTION 3: VIRTUAL TRADING EMULATOR (nse_groww_emulator.py PORT)
     // =====================================================================
     class VirtualTradingEmulator {
-      constructor(initialCapital = 1000000.0, slippageBps = 5.0) {
+      constructor(initialCapital = 1000000.0, slippageBps = 5.0, maxDailyPortfolioOrders = 15, maxDailyOrdersPerSymbol = 2) {
         this.initialCapital = initialCapital;
         this.cashBalance = initialCapital;
         this.slippageBps = slippageBps;
+        this.maxDailyPortfolioOrders = maxDailyPortfolioOrders;
+        this.maxDailyOrdersPerSymbol = maxDailyOrdersPerSymbol;
+        this.dailyOrderCounter = {}; // date_str -> total portfolio orders on that date
+        this.dailySymbolOrderCounter = {}; // `${date_str}_${sym}` -> orders for symbol on that date
+        this.throttledOrdersCount = 0;
         this.deliveryHoldings = {}; // sym -> { quantity, avgBuyPrice, buyTimestamp, totalBuyCostWithFees, rawBuyValue }
         this.shortPositions = {};   // sym -> { quantity, sellPrice, sellTimestamp, netProceeds, sellFees }
         this.tradeLedger = [];
@@ -632,6 +646,27 @@
         this.intradayGainsTotal = 0.0;
         this.idleCashInterestGross = 0.0;
         this.idleCashTax = 0.0;
+      }
+
+      _canExecuteOrderOnDate(sym, timestamp, isForcedLiquidation = false) {
+        if (isForcedLiquidation) return true;
+        const dayKey = String(timestamp).slice(0, 10);
+        const symDayKey = `${dayKey}_${sym}`;
+        const dayCount = this.dailyOrderCounter[dayKey] || 0;
+        const symCount = this.dailySymbolOrderCounter[symDayKey] || 0;
+
+        if (dayCount >= this.maxDailyPortfolioOrders || symCount >= this.maxDailyOrdersPerSymbol) {
+          this.throttledOrdersCount += 1;
+          return false;
+        }
+        return true;
+      }
+
+      _recordOrderOnDate(sym, timestamp) {
+        const dayKey = String(timestamp).slice(0, 10);
+        const symDayKey = `${dayKey}_${sym}`;
+        this.dailyOrderCounter[dayKey] = (this.dailyOrderCounter[dayKey] || 0) + 1;
+        this.dailySymbolOrderCounter[symDayKey] = (this.dailySymbolOrderCounter[symDayKey] || 0) + 1;
       }
 
       _ensureStockStat(sym) {
@@ -673,8 +708,10 @@
         return brokerage + stt + exchangeTxn + ipft + sebiFee + stampDuty + dpCharge + gst;
       }
 
-      buy(sym, qty, mode = "DELIVERY", price = 0, timestamp = "") {
+      buy(sym, qty, mode = "DELIVERY", price = 0, timestamp = "", bypassDailyLimit = false) {
         if (qty < 1 || price <= 0) return false;
+        if (!this._canExecuteOrderOnDate(sym, timestamp, bypassDailyLimit)) return false;
+
         const slip = this.slippageBps / 10000.0;
         const execPrice = price * (1.0 + slip);
         const turnover = qty * execPrice;
@@ -683,6 +720,7 @@
 
         if (totalCost > this.cashBalance) return false;
 
+        this._recordOrderOnDate(sym, timestamp);
         this.cashBalance -= totalCost;
         this.totalBrokerageAndStt += fees;
         this._ensureStockStat(sym);
@@ -711,9 +749,10 @@
         return true;
       }
 
-      sell(sym, qty, mode = "DELIVERY", price = 0, timestamp = "") {
+      sell(sym, qty, mode = "DELIVERY", price = 0, timestamp = "", bypassDailyLimit = false) {
         const holding = this.deliveryHoldings[sym];
         if (!holding || holding.quantity < qty || qty < 1) return false;
+        if (!this._canExecuteOrderOnDate(sym, timestamp, bypassDailyLimit)) return false;
 
         const slip = this.slippageBps / 10000.0;
         const execPrice = price * (1.0 - slip);
@@ -721,6 +760,7 @@
         const sellFees = this._calcEquityLegFee(sellTurnover, "SELL", mode);
         const netProceeds = sellTurnover - sellFees;
 
+        this._recordOrderOnDate(sym, timestamp);
         this.cashBalance += netProceeds;
         this.totalBrokerageAndStt += sellFees;
 
@@ -767,12 +807,15 @@
 
       shortSell(sym, qty, price, timestamp) {
         if (qty < 1 || price <= 0) return false;
+        if (!this._canExecuteOrderOnDate(sym, timestamp, false)) return false;
+
         const slip = this.slippageBps / 10000.0;
         const execPrice = price * (1.0 - slip);
         const turnover = qty * execPrice;
         const sellFees = this._calcEquityLegFee(turnover, "SELL", "INTRADAY");
         if (turnover > this.cashBalance * 1.05) return false;
 
+        this._recordOrderOnDate(sym, timestamp);
         this.shortPositions[sym] = {
           quantity: qty,
           sellTurnover: turnover,
@@ -788,6 +831,8 @@
       coverShort(sym, qty, price, timestamp) {
         const pos = this.shortPositions[sym];
         if (!pos || pos.quantity !== qty) return false;
+        // Same-day mandatory square-off of an open intraday short leg is always permitted
+        this._recordOrderOnDate(sym, timestamp);
         const slip = this.slippageBps / 10000.0;
         const execPrice = price * (1.0 + slip);
         const coverTurnover = qty * execPrice;
@@ -1079,6 +1124,11 @@
         "NMDC":        { p2016: 82,   m2020: 0.72, m2023: 1.35, m2025: 1.95, m2026: 2.15, vol: 0.0185 },
         "TATAMOTORS":  { p2016: 525,  m2020: 0.26, m2023: 1.22, m2025: 1.68, m2026: 1.85, vol: 0.0215 },
         "TATAPOWER":   { p2016: 76,   m2020: 0.72, m2023: 3.20, m2025: 5.50, m2026: 6.10, vol: 0.0190 },
+        "AUROPHARMA":  { p2016: 830,  m2020: 0.95, m2023: 1.08, m2025: 1.65, m2026: 1.78, vol: 0.0185 },
+        "HPCL":        { p2016: 195,  m2020: 0.68, m2023: 0.88, m2025: 1.85, m2026: 2.05, vol: 0.0180 },
+        "IOC":         { p2016: 98,   m2020: 0.58, m2023: 0.92, m2025: 1.62, m2026: 1.75, vol: 0.0160 },
+        "UPL":         { p2016: 460,  m2020: 0.98, m2023: 1.22, m2025: 1.15, m2026: 1.24, vol: 0.0175 },
+        "SHREECEM":    { p2016: 16800,m2020: 1.28, m2023: 1.52, m2025: 1.55, m2026: 1.64, vol: 0.0145 },
         // Later cohort additions (2018, 2020, 2022, 2024, 2025)
         "BAJAJFINSV":  { p2016: 310,  m2020: 1.95, m2023: 5.10, m2025: 5.75, m2026: 6.30, vol: 0.0175 },
         "BRITANNIA":   { p2016: 1650, m2020: 2.15, m2023: 2.75, m2025: 3.35, m2026: 3.65, vol: 0.0130 },
@@ -1093,7 +1143,11 @@
         "LTIM":        { p2016: 680,  m2020: 4.40, m2023: 7.60, m2025: 8.85, m2026: 9.55, vol: 0.0165 },
         "BEL":         { p2016: 45,   m2020: 0.78, m2023: 3.05, m2025: 6.45, m2026: 7.20, vol: 0.0175 },
         "SHRIRAMFIN":  { p2016: 185,  m2020: 0.95, m2023: 2.05, m2025: 3.35, m2026: 3.75, vol: 0.0180 },
-        "TRENT":       { p2016: 215,  m2020: 3.15, m2023: 9.85, m2025: 26.5, m2026: 29.8, vol: 0.0185 }
+        "TRENT":       { p2016: 215,  m2020: 3.15, m2023: 9.85, m2025: 26.5, m2026: 29.8, vol: 0.0185 },
+        "ETERNAL":     { p2016: 55,   m2020: 1.35, m2023: 1.98, m2025: 4.60, m2026: 5.25, vol: 0.0210 },
+        "INDIGO":      { p2016: 940,  m2020: 1.45, m2023: 2.65, m2025: 4.55, m2026: 5.05, vol: 0.0170 },
+        "JIOFIN":      { p2016: 120,  m2020: 1.40, m2023: 1.85, m2025: 2.75, m2026: 3.10, vol: 0.0180 },
+        "MAXHEALTH":   { p2016: 115,  m2020: 1.15, m2023: 4.95, m2025: 8.40, m2026: 9.35, vol: 0.0175 }
       };
 
       static _generateStockSeries(sym) {
@@ -1472,22 +1526,22 @@
     // =====================================================================
     // SECTION 6: 6 COMPOUNDING ALGORITHMIC TRADING STRATEGIES
     // =====================================================================
-    function _runSlotBuy(emu, sym, slotCash, price, dt) {
+    function _runSlotBuy(emu, sym, slotCash, price, dt, bypassDailyLimit = false) {
       const qty = Math.floor((slotCash * 0.985) / price);
       if (qty < 1) return slotCash;
       const cashBefore = emu.cashBalance;
-      if (emu.buy(sym, qty, "DELIVERY", price, dt)) {
+      if (emu.buy(sym, qty, "DELIVERY", price, dt, bypassDailyLimit)) {
         const spent = cashBefore - emu.cashBalance;
         return Math.max(0.0, slotCash - spent);
       }
       return slotCash;
     }
 
-    function _runSlotSell(emu, sym, slotCash, price, dt) {
+    function _runSlotSell(emu, sym, slotCash, price, dt, bypassDailyLimit = false) {
       if (!emu.deliveryHoldings[sym]) return slotCash;
       const qty = emu.deliveryHoldings[sym].quantity;
       const cashBefore = emu.cashBalance;
-      if (emu.sell(sym, qty, "DELIVERY", price, dt)) {
+      if (emu.sell(sym, qty, "DELIVERY", price, dt, bypassDailyLimit)) {
         const proceeds = emu.cashBalance - cashBefore;
         return slotCash + proceeds;
       }
@@ -1498,9 +1552,10 @@
       let slotCash = alloc;
       const firstRow = rows[0];
       const lastRow = rows[rows.length - 1];
-      slotCash = _runSlotBuy(emu, sym, slotCash, firstRow.close, firstRow.date_str);
+      // Equal-Weight Buy & Hold buys all 50 Point-in-Time constituents on start_date and sells on end_date
+      slotCash = _runSlotBuy(emu, sym, slotCash, firstRow.close, firstRow.date_str, true);
       const idleCashDuringHold = slotCash;
-      _runSlotSell(emu, sym, slotCash, lastRow.close, lastRow.date_str);
+      _runSlotSell(emu, sym, slotCash, lastRow.close, lastRow.date_str, true);
       return idleCashDuringHold;
     }
 
@@ -1602,9 +1657,8 @@
       }
       return idleCashSum / Math.max(1, rows.length);
     }
-
-    function evaluateStrategyAcrossNifty50(strategyName, strategyFn, dataset, totalBudget, durationDays, slippageBps) {
-      const masterEmu = new VirtualTradingEmulator(totalBudget, slippageBps);
+    function evaluateStrategyAcrossNifty50(strategyName, strategyFn, dataset, totalBudget, durationDays, slippageBps, dailyTradeLimit = 15) {
+      const masterEmu = new VirtualTradingEmulator(totalBudget, slippageBps, dailyTradeLimit, 2);
       const symbols = Object.keys(dataset);
       const allocPerStock = totalBudget / Math.max(1, symbols.length);
       let totalAvgIdleCash = 0.0;
@@ -1617,7 +1671,7 @@
         // Liquidate any open delivery holding at end of period for fair mark-to-market comparison
         if (masterEmu.deliveryHoldings[sym]) {
           const lastRow = rows[rows.length - 1];
-          masterEmu.sell(sym, masterEmu.deliveryHoldings[sym].quantity, "DELIVERY", lastRow.close, lastRow.date_str);
+          masterEmu.sell(sym, masterEmu.deliveryHoldings[sym].quantity, "DELIVERY", lastRow.close, lastRow.date_str, true);
         }
       }
 
@@ -1641,6 +1695,7 @@
         meta: {
           winRate: Number(winRate.toFixed(1)),
           totalOrders: summary.total_trades_executed,
+          throttledOrders: masterEmu.throttledOrdersCount,
           exitCount: exitTrades.length,
           stcgTax: summary.stcg_tax,
           ltcgTax: summary.ltcg_tax,
@@ -1943,7 +1998,7 @@
       return sign + absVal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
-    function runComparisonForPeriod(startDateIso, endDateIso, totalBudget = 1000000.0, standardFdMinDays = 365, slippageBps = 5.0) {
+    function runComparisonForPeriod(startDateIso, endDateIso, totalBudget = 1000000.0, standardFdMinDays = 365, slippageBps = 5.0, dailyTradeLimit = 15) {
       const tStart = performance.now();
       const startDate = toDdMmYyyy(startDateIso);
       const endDate = toDdMmYyyy(endDateIso);
@@ -1965,13 +2020,13 @@
 
       const rows = [];
       for (const [name, fn] of algorithms) {
-        rows.push(evaluateStrategyAcrossNifty50(name, fn, dataset, totalBudget, durationDays, slippageBps));
+        rows.push(evaluateStrategyAcrossNifty50(name, fn, dataset, totalBudget, durationDays, slippageBps, dailyTradeLimit));
       }
 
-      // Bitcoin (BTC-INR) Benchmark
+      // Bitcoin (BTC-INR) Benchmark (Strict Single Buy on start_date -> Single Sell on end_date)
       rows.push(BitcoinIndiaBenchmark.evaluateBtcBuyAndHold(startDate, endDate, totalBudget));
 
-      // Gold Benchmarks (NSE Gold ETF & Physical/Digital 24K Gold)
+      // Gold Benchmarks (Strict Single Buy on start_date -> Single Sell on end_date)
       rows.push(GoldIndiaBenchmark.evaluateGoldEtfBuyAndHold(startDate, endDate, totalBudget, slippageBps));
       rows.push(GoldIndiaBenchmark.evaluatePhysicalDigitalGoldHold(startDate, endDate, totalBudget));
 
@@ -2036,6 +2091,7 @@
         duration_days: durationDays,
         total_budget: totalBudget,
         slippage_bps: slippageBps,
+        daily_trade_limit: dailyTradeLimit,
         pit_symbols: symbols,
         ranked_rows: ranked,
         ascii_log: ascii,
@@ -2647,15 +2703,15 @@
       if (lblManual) lblManual.textContent = String(manualCount);
     }
 
-    async function executeDefaultThreeWindowSuite(budget = 1000000.0, minFd = 365, slip = 5.0) {
+    async function executeDefaultThreeWindowSuite(budget = 1000000.0, minFd = 365, slip = 5.0, dailyLimit = 15) {
       // Automatically attempt to load any ./nse_data_cache/*.csv files hosted on GitHub Pages
       const allNeededSymbols = PointInTimeNifty50.getAllUniqueSymbols();
       await NSEDataProvider.autoSyncRepoCacheForSymbols(allNeededSymbols);
 
       SESSION_PERIOD_REPORTS.length = 0;
-      runComparisonForPeriod("2016-10-26", "2026-10-26", budget, minFd, slip);
-      runComparisonForPeriod("2023-10-26", "2026-10-26", budget, minFd, slip);
-      runComparisonForPeriod("2025-10-26", "2026-10-26", budget, minFd, slip);
+      runComparisonForPeriod("2016-10-26", "2026-10-26", budget, minFd, slip, dailyLimit);
+      runComparisonForPeriod("2023-10-26", "2026-10-26", budget, minFd, slip, dailyLimit);
+      runComparisonForPeriod("2025-10-26", "2026-10-26", budget, minFd, slip, dailyLimit);
       ACTIVE_REPORT_INDEX = 0; // Show 10-Year comprehensive window first
       renderActivePeriodReport();
       updateDataCacheBadges();
@@ -2665,9 +2721,9 @@
       populateCsvExportDropdown();
 
       // Run initial 3-Window Suite immediately with calibrated historical waypoints, then auto-sync ./nse_data_cache/
-      runComparisonForPeriod("2016-10-26", "2026-10-26", 1000000.0, 365, 5.0);
-      runComparisonForPeriod("2023-10-26", "2026-10-26", 1000000.0, 365, 5.0);
-      runComparisonForPeriod("2025-10-26", "2026-10-26", 1000000.0, 365, 5.0);
+      runComparisonForPeriod("2016-10-26", "2026-10-26", 1000000.0, 365, 5.0, 15);
+      runComparisonForPeriod("2023-10-26", "2026-10-26", 1000000.0, 365, 5.0, 15);
+      runComparisonForPeriod("2025-10-26", "2026-10-26", 1000000.0, 365, 5.0, 15);
       ACTIVE_REPORT_INDEX = 0;
       renderActivePeriodReport();
       updateDataCacheBadges();
@@ -2676,9 +2732,9 @@
       NSEDataProvider.autoSyncRepoCacheForSymbols(PointInTimeNifty50.getAllUniqueSymbols()).then(() => {
         if (NSEDataProvider.repoCsvLoaded.size > 0) {
           SESSION_PERIOD_REPORTS.length = 0;
-          runComparisonForPeriod("2016-10-26", "2026-10-26", 1000000.0, 365, 5.0);
-          runComparisonForPeriod("2023-10-26", "2026-10-26", 1000000.0, 365, 5.0);
-          runComparisonForPeriod("2025-10-26", "2026-10-26", 1000000.0, 365, 5.0);
+          runComparisonForPeriod("2016-10-26", "2026-10-26", 1000000.0, 365, 5.0, 15);
+          runComparisonForPeriod("2023-10-26", "2026-10-26", 1000000.0, 365, 5.0, 15);
+          runComparisonForPeriod("2025-10-26", "2026-10-26", 1000000.0, 365, 5.0, 15);
           ACTIVE_REPORT_INDEX = 0;
           renderActivePeriodReport();
           showToast(`Auto-loaded ${NSEDataProvider.repoCsvLoaded.size} CSV file(s) from ./nse_data_cache/!`);
@@ -2692,13 +2748,14 @@
         const budget = parseFloat(document.getElementById("inpBudget").value) || 1000000.0;
         const minFd = parseInt(document.getElementById("inpMinFdDays").value, 10) || 365;
         const slip = parseFloat(document.getElementById("inpSlippageBps").value) || 0;
+        const dailyLimit = parseInt(document.getElementById("inpDailyTradeLimit").value, 10) || 15;
 
         if (new Date(s) >= new Date(e)) {
           showToast("Start Date must be earlier than End Date.");
           return;
         }
         await NSEDataProvider.autoSyncRepoCacheForSymbols(PointInTimeNifty50.getConstituentsAsOf(s));
-        runComparisonForPeriod(s, e, budget, minFd, slip);
+        runComparisonForPeriod(s, e, budget, minFd, slip, dailyLimit);
         renderActivePeriodReport();
         showToast(`Completed backtest for ${toDdMmYyyy(s)} → ${toDdMmYyyy(e)}`);
       });
@@ -2708,8 +2765,9 @@
         const budget = parseFloat(document.getElementById("inpBudget").value) || 1000000.0;
         const minFd = parseInt(document.getElementById("inpMinFdDays").value, 10) || 365;
         const slip = parseFloat(document.getElementById("inpSlippageBps").value) || 0;
+        const dailyLimit = parseInt(document.getElementById("inpDailyTradeLimit").value, 10) || 15;
 
-        await executeDefaultThreeWindowSuite(budget, minFd, slip);
+        await executeDefaultThreeWindowSuite(budget, minFd, slip, dailyLimit);
         showToast("Executed 3-Window Suite (10Y, 3Y, 1Y) & queued for PDF export.");
       });
 
